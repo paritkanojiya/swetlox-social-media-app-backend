@@ -1,11 +1,13 @@
 package com.swetlox_app.swetlox.service;
 
+import com.swetlox_app.swetlox.allenum.UserType;
 import com.swetlox_app.swetlox.entity.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class UserDetailsImpl implements UserDetails {
@@ -31,6 +33,13 @@ public class UserDetailsImpl implements UserDetails {
         return user.getEmail();
     }
 
+    public boolean isAuth2User(){
+        return List.of(UserType.GOOGLE,UserType.GITHUB).contains(user.getUserType());
+    }
+
+    public boolean isVerified(){
+        return user.getIsVerified();
+    }
     @Override
     public boolean isAccountNonExpired() {
         return false;
@@ -50,4 +59,5 @@ public class UserDetailsImpl implements UserDetails {
     public boolean isEnabled() {
         return false;
     }
+
 }

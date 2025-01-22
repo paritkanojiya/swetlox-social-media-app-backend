@@ -1,8 +1,9 @@
 package com.swetlox_app.swetlox.controller;
 
+import com.swetlox_app.swetlox.dto.comment.CommentRequestDto;
 import com.swetlox_app.swetlox.entity.Comment;
 import com.swetlox_app.swetlox.entity.User;
-import com.swetlox_app.swetlox.model.PostModel;
+import com.swetlox_app.swetlox.dto.post.PostResponseDto;
 import com.swetlox_app.swetlox.service.CommentService;
 import com.swetlox_app.swetlox.service.PostService;
 import com.swetlox_app.swetlox.service.UserService;
@@ -26,21 +27,28 @@ public class PostController {
     private final CommentService commentService;
     
     @PostMapping
-    public ResponseEntity<PostModel> createPost(@RequestHeader("Authorization") String token,@RequestParam("caption") String caption, @RequestPart("file")MultipartFile file) throws IOException {
+    public ResponseEntity<Void> createPost(@RequestHeader("Authorization") String token, @RequestParam("visibility") boolean visibility, @RequestParam("caption") String caption, @RequestPart("file")MultipartFile file) throws IOException {
         User authUser = userService.getAuthUser(token);
-        PostModel postModel = postService.savePost(authUser, file, caption);
-        return ResponseEntity.status(HttpStatus.CREATED).body(postModel);
+        postService.savePost(authUser, file, caption,visibility);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
     
     @GetMapping("/get-post")
-    public ResponseEntity<List<PostModel>> getAuthUserPost(@RequestHeader("Authorization") String token){
+    public ResponseEntity<List<PostResponseDto>> getAuthUserPost(@RequestParam(value = "pageNum",defaultValue = "0") Integer pageNum, @RequestHeader("Authorization") String token){
         User authUser = userService.getAuthUser(token);
-        List<PostModel> postModelList = postService.getPostListByUserId(authUser);
+        List<PostResponseDto> postModelList = postService.getPostListByUserId(authUser);
         return ResponseEntity.ok(postModelList);
     }
+
+    @GetMapping("/get-post/{id}")
+    public ResponseEntity<Page<PostResponseDto>> getUserPost(@PathVariable("id") String userId, @RequestParam(value = "pageNum",defaultValue = "0") Integer pageNum, @RequestHeader("Authorization") String authToken){
+        Page<PostResponseDto> postModelPage = postService.loadUserPost(userId, authToken, pageNum);
+        return ResponseEntity.ok(postModelPage);
+    }
+
     @GetMapping("/{postId}")
-    public ResponseEntity<PostModel> getPost(@PathVariable("postId") String postId){
-        PostModel postModel = postService.getPostByPostId(postId);
+    public ResponseEntity<PostResponseDto> getPost(@PathVariable("postId") String postId,@RequestHeader("Authorization") String authToken){
+        PostResponseDto postModel = postService.getPostResponseDtoByPostId(postId,authToken);
         return ResponseEntity.ok(postModel);
     }
     
@@ -52,8 +60,8 @@ public class PostController {
     }
     
     @GetMapping("/load-posts/{pageNum}")
-    public ResponseEntity<Page<PostModel>> loadInitialPost(@PathVariable("pageNum") Integer pageNum,@RequestHeader("Authorization") String token){
-        Page<PostModel> postModels = postService.loadPost(pageNum,token);
+    public ResponseEntity<Page<PostResponseDto>> loadInitialPost(@PathVariable("pageNum") Integer pageNum, @RequestHeader("Authorization") String token){
+        Page<PostResponseDto> postModels = postService.loadPost(pageNum,token);
         return ResponseEntity.ok(postModels);
     } 
     
@@ -66,11 +74,11 @@ public class PostController {
 
 
     @PostMapping("/comment")
-    public ResponseEntity<Comment> comment(@ModelAttribute Comment comment,@RequestHeader("Authorization") String token){
+    public ResponseEntity<Void> comment(@RequestBody CommentRequestDto commentRequestDto, @RequestHeader("Authorization") String token){
         User authUser = userService.getAuthUser(token);
-        Comment savedComment = commentService.saveComment(comment, authUser);
+        commentService.saveComment(commentRequestDto, authUser);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(savedComment);
+                .build();
     }
     
     @DeleteMapping("/comment/{commentId}")
@@ -92,8 +100,8 @@ public class PostController {
     }
 
     @GetMapping("/bookmark-post")
-    public ResponseEntity<List<PostModel>> bookmarkPost(@RequestHeader("Authorization") String token){
-        List<PostModel> bookMarkPost = postService.getBookMarkPost(userService.getAuthUser(token).getId());
+    public ResponseEntity<List<PostResponseDto>> bookmarkPost(@RequestHeader("Authorization") String token){
+        List<PostResponseDto> bookMarkPost = postService.getBookMarkPost(token);
         return ResponseEntity.ok(bookMarkPost);
     }
 

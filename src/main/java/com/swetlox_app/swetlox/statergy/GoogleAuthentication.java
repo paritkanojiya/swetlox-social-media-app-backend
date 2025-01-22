@@ -1,10 +1,16 @@
 package com.swetlox_app.swetlox.statergy;
 
-import com.swetlox_app.swetlox.dto.UserDto;
+import com.swetlox_app.swetlox.allenum.UserType;
+import com.swetlox_app.swetlox.dto.user.UserDetailsDto;
 import com.swetlox_app.swetlox.entity.Role;
-import com.swetlox_app.swetlox.service.UserService;
+import com.swetlox_app.swetlox.entity.User;
+import com.swetlox_app.swetlox.exception.customException.UserAlreadyExistEx;
+import com.swetlox_app.swetlox.service.OAuth2Service;
+import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.*;
+import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -12,24 +18,30 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 import java.util.Map;
 
+@Component(value = "GoogleAuthentication")
+@Scope("prototype")
 public class GoogleAuthentication implements OAuthAuthenticationStatrgey{
 
-
-    private final static String CLIENT_ID="";
-    private final static String CLIENT_SECRET="";
-    private final static String TOKEN_URI="https://oauth2.googleapis.com/token";
-    private final static String FETCH_DATA_URI="https://www.googleapis.com/oauth2/v3/userinfo";
+    @Value("${oAuth2.google.clientId}")
+    private String CLIENT_ID;
+    @Value("${oAuth2.google.client-secret}")
+    private String CLIENT_SECRET;
+    @Value("${oAuth2.google.token-uri}")
+    private String TOKEN_URI;
+    @Value("${oAuth2.google.fetch-data-uri}")
+    private String FETCH_DATA_URI;
 
 
     private final RestTemplate restTemplate;
-    private final UserService userService;
+    private final OAuth2Service oAuth2Service;
 
-    public GoogleAuthentication(RestTemplate restTemplate, UserService userService){
+    public GoogleAuthentication(RestTemplate restTemplate, OAuth2Service oAuth2Service){
         this.restTemplate = restTemplate;
-        this.userService=userService;
+        this.oAuth2Service=oAuth2Service;
     }
+
     @Override
-    public void authenticate(String code) {
+    public User authenticate(String code) throws UserAlreadyExistEx, MessagingException {
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("client_id", CLIENT_ID);
         params.add("client_secret", CLIENT_SECRET);
@@ -41,9 +53,10 @@ public class GoogleAuthentication implements OAuthAuthenticationStatrgey{
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
         ResponseEntity<Map> response = restTemplate.exchange(TOKEN_URI, HttpMethod.POST, request, Map.class);
         System.out.println(response);
-        fetchUserData(response.getBody().get("access_token").toString());
+        return fetchUserData(response.getBody().get("access_token").toString());
     }
-    public void fetchUserData(String token){
+
+    private User fetchUserData(String token) throws UserAlreadyExistEx, MessagingException {
         HttpHeaders headers=new HttpHeaders();
         headers.setBearerAuth(token);
         HttpEntity<Object> request = new HttpEntity<>(headers);
@@ -55,13 +68,15 @@ public class GoogleAuthentication implements OAuthAuthenticationStatrgey{
             String email = (String) responseBody.get("email");
             Role role = new Role();
             role.setRole("ROLE_USER");
-            UserDto userDto = UserDto.builder()
+            UserDetailsDto userDto = UserDetailsDto.builder()
                     .userName(name)
                     .fullName(name)
+                    .userType(UserType.GOOGLE)
                     .email(email)
                     .roleList(List.of(role))
                     .build();
-            userService.saveOAut2User(userDto);
+           return oAuth2Service.saveOAut2User(userDto);
         }
+        throw new RuntimeException("Something went wrong in OAuth2");
     }
 }

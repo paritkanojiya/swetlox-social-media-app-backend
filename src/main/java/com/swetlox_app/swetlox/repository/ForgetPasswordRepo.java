@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface ForgetPasswordRepo extends MongoRepository<ForgetPassword,String> {
     Optional<ForgetPassword> findByUserId(String authId);
+
+    Optional<ForgetPassword> findByToken(String token);
 }

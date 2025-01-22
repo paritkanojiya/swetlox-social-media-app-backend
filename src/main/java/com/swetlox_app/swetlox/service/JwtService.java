@@ -21,8 +21,8 @@ public class JwtService {
     @Value("${jwt.issuer}")
     private String issuer;
 
-    public String generateToken(UserDetails userDetails){
-        return Jwts.builder().subject(userDetails.getUsername())
+    public String generateToken(String userEmail){
+        return Jwts.builder().subject(userEmail)
                 .signWith(key())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis()+EXPIRY_TIME))

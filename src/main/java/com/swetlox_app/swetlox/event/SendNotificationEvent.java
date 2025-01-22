@@ -1,24 +1,22 @@
 package com.swetlox_app.swetlox.event;
 
 
+import com.swetlox_app.swetlox.dto.notification.NotificationDto;
 import lombok.Getter;
+import lombok.ToString;
 import org.springframework.context.ApplicationEvent;
 
 
 @Getter
+@ToString
 public class SendNotificationEvent extends ApplicationEvent {
 
-    private final String message;
-    private final String postURL;
-    private final String sender;
-    private final String recipientEmail;
+    private final NotificationDto notificationDto;
 
-    public SendNotificationEvent(Object source, String message, String postURL, String sender, String recipientEmail) {
+    public SendNotificationEvent(Object source,NotificationDto notificationDto) {
         super(source);
-        this.message = message;
-        this.postURL = postURL;
-        this.sender = sender;
-        this.recipientEmail = recipientEmail;
-
+        this.notificationDto=notificationDto;
     }
+
+
 }

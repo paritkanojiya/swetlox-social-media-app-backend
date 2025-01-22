@@ -1,38 +1,56 @@
 package com.swetlox_app.swetlox.statergy;
 
-import com.swetlox_app.swetlox.dto.UserDto;
+import com.swetlox_app.swetlox.allenum.UserType;
+import com.swetlox_app.swetlox.dto.user.UserDetailsDto;
 import com.swetlox_app.swetlox.entity.Role;
-import com.swetlox_app.swetlox.service.UserService;
+import com.swetlox_app.swetlox.entity.User;
+import com.swetlox_app.swetlox.exception.customException.UserAlreadyExistEx;
+import com.swetlox_app.swetlox.service.OAuth2Service;
+import jakarta.mail.MessagingException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.*;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
 
+@Component(value = "GitHubAuthentication")
+@Scope("prototype")
+@Slf4j
 public class GitHubAuthentication implements OAuthAuthenticationStatrgey{
-    private final static String CLIENT_ID="";
-    private final static String CLIENT_SECRET="";
-    private final static String TOKEN_URI="https://github.com/login/oauth/access_token";
-    private final static String FETCH_DATA_URI = "https://api.github.com/user";
-    private final RestTemplate restTemplate;
-    private final UserService userService;
 
-    public GitHubAuthentication(RestTemplate restTemplate, UserService userService){
+    @Value("${oAuth2.github.clientId}")
+    private String CLIENT_ID;
+    @Value("${oAuth2.github.client-secret}")
+    private String CLIENT_SECRET;
+    @Value("${oAuth2.github.token-uri}")
+    private String TOKEN_URI;
+    @Value("${oAuth2.github.fetch-data-uri}")
+    private String FETCH_DATA_URI;
+    private final RestTemplate restTemplate;
+    private final OAuth2Service oAuth2Service;
+
+    public GitHubAuthentication(RestTemplate restTemplate, OAuth2Service oAuth2Service){
         this.restTemplate = restTemplate;
-        this.userService=userService;
+        this.oAuth2Service=oAuth2Service;
     }
 
     @Override
-    public void authenticate(String code) {
+    public User authenticate(String code) throws UserAlreadyExistEx, MessagingException {
+        log.info("{} {} {}",CLIENT_ID,CLIENT_SECRET,code);
         Map<String, String> params = Map.of("client_id", CLIENT_ID, "client_secret", CLIENT_SECRET, "code", code);
         HttpHeaders headers=new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Map<String, String>> request = new HttpEntity<>(params, headers);
         ResponseEntity<Map> response = restTemplate.exchange(TOKEN_URI, HttpMethod.POST, request, Map.class);
-        fetchUserData(response.getBody().get("access_token").toString());
+        System.out.println(response);
+        return fetchUserData(response.getBody().get("access_token").toString());
     }
 
-    public void fetchUserData(String token){
+    private User fetchUserData(String token) throws UserAlreadyExistEx, MessagingException {
         HttpHeaders headers=new HttpHeaders();
         headers.setBearerAuth(token);
         HttpEntity<Object> request = new HttpEntity<>(headers);
@@ -44,13 +62,15 @@ public class GitHubAuthentication implements OAuthAuthenticationStatrgey{
             String email = (String) responseBody.get("email");
             Role role = new Role();
             role.setRole("ROLE_USER");
-            UserDto userDto = UserDto.builder()
+            UserDetailsDto userDto = UserDetailsDto.builder()
                     .userName(name)
                     .fullName(name)
                     .email(email)
+                    .userType(UserType.GITHUB)
                     .roleList(List.of(role))
                     .build();
-            userService.saveOAut2User(userDto);
+            return oAuth2Service.saveOAut2User(userDto);
         }
+        throw new RuntimeException("Something went wrong in OAuth2");
     }
 }

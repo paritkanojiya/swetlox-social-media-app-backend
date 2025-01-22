@@ -1,11 +1,14 @@
 package com.swetlox_app.swetlox.controller;
 
+import com.swetlox_app.swetlox.dto.UserConnectionDTO;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.service.ChatRoomService;
 import com.swetlox_app.swetlox.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -18,6 +21,7 @@ public class ChatController {
     @GetMapping("/create-chatroom/{recipientId}")
     public void createChatRoom(@PathVariable("recipientId") String recipientId, @RequestHeader("Authorization") String token){
         User authUser = userService.getAuthUser(token);
-        chatRoomService.createChatRoom(authUser.getEmail(),recipientId);
+        chatRoomService.createChatRoom(authUser.getId(),recipientId);
     }
+
 }

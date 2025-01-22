@@ -1,15 +1,19 @@
 package com.swetlox_app.swetlox.service;
 
-import com.cloudinary.Cloudinary;
 import com.mongodb.client.result.UpdateResult;
+import com.swetlox_app.swetlox.allenum.EntityType;
+import com.swetlox_app.swetlox.allenum.MediaType;
+import com.swetlox_app.swetlox.allenum.NotificationType;
+import com.swetlox_app.swetlox.dto.notification.InteractionNotificationDto;
+import com.swetlox_app.swetlox.dto.notification.NotificationDto;
+import com.swetlox_app.swetlox.dto.user.UserDto;
 import com.swetlox_app.swetlox.entity.*;
-import com.swetlox_app.swetlox.event.SendNotificationEvent;
-import com.swetlox_app.swetlox.model.PostModel;
+import com.swetlox_app.swetlox.dto.post.PostResponseDto;
 import com.swetlox_app.swetlox.repository.PostRepo;
 import com.swetlox_app.swetlox.repository.UserCollectionRepo;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -28,26 +32,29 @@ import java.util.stream.Collectors;
 public class PostService {
 
     private final PostRepo postRepo;
-    private final Cloudinary cloudinaryTemplate;
+    private final CloudService cloudService;
     private final ModelMapper modelMapper;
     private final MongoTemplate mongoTemplate;
     private final UserCollectionRepo userCollectionRepo;
     private final UserService userService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService notificationService;
     private final CommentService commentService;
+    private final UserConnectionService userConnectionService;
+    @Value("${default.capacity.page.size}")
+    private int DEFAULT_CAPACITY_FOR_PAGE_SIZE;
     
 
-    public PostModel savePost(User authUser, MultipartFile file,String caption) throws IOException {
-        Map uploaded = cloudinaryTemplate.uploader().upload(file.getBytes(), Collections.emptyMap());
+    public void savePost(User authUser, MultipartFile file, String caption, boolean visibility) throws IOException {
+        Map uploaded = cloudService.upload(file, MediaType.IMAGE);
         String postURL=(String)uploaded.get("url");
         System.out.println(postURL);
         Post createdPost = Post.builder().userId(authUser.getId())
                 .caption(caption)
                 .createdAt(LocalDateTime.now())
                 .postURL(postURL)
+                .privatePost(visibility)
                 .build();
-        Post savedPost = postRepo.save(createdPost);
-        return modelMapper.map(savedPost, PostModel.class);
+        postRepo.save(createdPost);
     }
 
     public void deletePost(String postId,String authId){
@@ -68,51 +75,65 @@ public class PostService {
         UpdateResult updateResult = mongoTemplate.updateFirst(query, update, UserCollection.class);
         System.out.println(updateResult);
     }
-    public List<PostModel> getPostListByUserId(User authuser){
-        List<PostModel> postModelList=new ArrayList<>();
-        postRepo.findByUserId(authuser.getId()).forEach(post-> {
-            PostModel postModel = modelMapper.map(post, PostModel.class);
-            User user = userService.getUserById(authuser.getId());
-            postModel.setProfileURL(user.getProfileURL());
-            postModel.setUserName(user.getUserName());
-            List<String> likedUserList = post.getLikedUserList();
-            postModel.setLikeCount(likedUserList!=null ? likedUserList.size() : 0);
-            postModelList.add(postModel);
-        });
-        return postModelList;
+
+
+    public List<PostResponseDto> getPostListByUserId(User authuser){
+        return postRepo.findByUserId(authuser.getId()).stream().map(post -> entityToPostResponseDto(post,authuser)).toList();
     }
 
     public void likePost(String postId,String authId){
-        User authUser = userService.getUserById(authId);
         Post post = postRepo.findById(postId).orElseThrow(() -> new RuntimeException("post not found"));
-        User postUser = userService.getUserById(post.getUserId());
         boolean isLiked=postRepo.existsByIdAndLikedUserListContaining(postId,authId);
         if(isLiked){
             removeUserIdFromLikedUserList(postId,authId);
             return;
         }
         addUserIdFromLikedUserList(postId,authId);
-        SendNotificationEvent sendNotificationEvent = new SendNotificationEvent(this,"like your post",post.getPostURL() , authUser.getUserName(),postUser.getEmail());
-        eventPublisher.publishEvent(sendNotificationEvent);
+        UserDto userDto = userService.getUserDtoById(authId);
+        User user = userService.getUserById(post.getUserId());
+        NotificationDto notificationDto=new InteractionNotificationDto(postId,userDto,user.getEmail(),"like on your post", NotificationType.POST,post.getPostURL());
+        notificationService.sendNotification(notificationDto);
     }
-    public Page<PostModel> loadPost(Integer pageNum,String token){
+
+    public Page<PostResponseDto> loadPost(Integer pageNum, String token){
         User authUser = userService.getAuthUser(token);
-        Pageable pageRequest= PageRequest.of(pageNum,10, Sort.by(Sort.Direction.DESC,"createdAt"));
-        Page<Post> postPage = postRepo.findAll(pageRequest);
-        List<PostModel> postModelList = postPage.map(this::convertPostModel).map(postModel -> {
-            User user = userService.getUserById(postModel.getUserId());
-            postModel.setUserName(user.getUserName());
-            postModel.setProfileURL(user.getProfileURL());
-            postModel.setLike(postRepo.existsByIdAndLikedUserListContaining(postModel.getPostId(),authUser.getId()));
-            postModel.setBookMark(userCollectionRepo.existsByUserIdAndPostListContains(authUser.getId(),postModel.getPostId()));
-            return postModel;
-        }).stream().collect(Collectors.toList());
+        Pageable pageRequest=PageRequest.of(pageNum,DEFAULT_CAPACITY_FOR_PAGE_SIZE,Sort.Direction.DESC,"createdAt");
+        Query connectionQuery = new Query(Criteria.where("followerId").is(authUser.getId()));
+        List<String> followedUserIds = mongoTemplate.find(connectionQuery, UserConnection.class)
+                .stream()
+                .map(UserConnection::getUserId)
+                .toList();
+
+        // Step 2: Build criteria for public or follower-visible posts
+        Criteria publicPosts = Criteria.where("privatePost").is(false);
+        Criteria privatePosts = Criteria.where("userId").in(followedUserIds);
+
+        Query postQuery = new Query(new Criteria().orOperator(publicPosts, privatePosts))
+                .with(pageRequest);
+
+        // Step 3: Fetch posts
+        List<Post> posts = mongoTemplate.find(postQuery, Post.class);
+        List<PostResponseDto> postResponseDtoList = posts.stream().map(post -> this.entityToPostResponseDto(post, authUser)).toList();
+        // Step 4: Count total posts matching the query
+        long total = mongoTemplate.count(postQuery.skip(-1).limit(-1), Post.class);
+
+        return new PageImpl<>(postResponseDtoList, pageRequest, total);
+    }
+
+    public Page<PostResponseDto> loadUserPost(String userId, String authToken, Integer pageNum){
+        System.out.println("page number  for load user post "+pageNum);
+        User user = userService.getUserById(userId);
+        User authUser = userService.getAuthUser(authToken);
+        Pageable pageRequest=PageRequest.of(pageNum,DEFAULT_CAPACITY_FOR_PAGE_SIZE,Sort.Direction.DESC,"createdAt");
+        Page<Post> postPage = postRepo.findByUserId(user.getId(), pageRequest);
+        List<PostResponseDto> postModelList = postPage.stream().map(post->entityToPostResponseDto(post,authUser)).collect(Collectors.toList());
         return new PageImpl<>(postModelList,pageRequest,postPage.getTotalElements());
     }
 
-    public PostModel getPostByPostId(String postId){
-        return postRepo.findById(postId).map(this::convertPostModel).orElse(null);
+    public Post getPostById(String postId){
+        return postRepo.findById(postId).orElseThrow(()->new RuntimeException("provided "+postId+" post not found"));
     }
+
     private void removeUserIdFromLikedUserList(String postId, String userId) {
         Query query = new Query(Criteria.where("_id").is(postId));
         Update update = new Update().pull("likedUserList", userId);
@@ -124,10 +145,18 @@ public class PostService {
         Update update = new Update().addToSet("likedUserList", userId);
         mongoTemplate.updateFirst(query, update, Post.class);
     }
-    private PostModel convertPostModel(Post post){
-        PostModel postModel = modelMapper.map(post, PostModel.class);
-        postModel.setLikeCount(post.getLikedUserList()!=null ? post.getLikedUserList().size() : 0);
-        return postModel;
+    private PostResponseDto entityToPostResponseDto(Post post,User authUser){
+        UserDto userDto = userService.getUserDtoById(post.getUserId());
+        return PostResponseDto.builder()
+                .postId(post.getId())
+                .postUser(userDto)
+                .postURL(post.getPostURL())
+                .caption(post.getCaption())
+                .createdAt(post.getCreatedAt())
+                .likeCount(post.getLikedUserList() != null ? post.getLikedUserList().size() : 0)
+                .isLike(postRepo.existsByIdAndLikedUserListContaining(post.getId(), authUser.getId()))
+                .isBookMark(userCollectionRepo.existsByUserIdAndPostListContains(authUser.getId(), post.getId()))
+                .build();
     }
 
     public void bookMarkPost(String postId,User authUser){
@@ -152,11 +181,12 @@ public class PostService {
        return commentService.getPostComment(postId);
     }
     
-    public List<PostModel> getBookMarkPost(String authId){
-        Optional<UserCollection> optionalUserCollection = userCollectionRepo.findByUserId(authId);
+    public List<PostResponseDto> getBookMarkPost(String authToken){
+        User authUser = userService.getAuthUser(authToken);
+        Optional<UserCollection> optionalUserCollection = userCollectionRepo.findByUserId(authUser.getId());
         if(optionalUserCollection.isPresent()){
             UserCollection userCollection = optionalUserCollection.get();
-           return userCollection.getPostList().stream().map(this::getPostByPostId).collect(Collectors.toList());
+           return userCollection.getPostList().stream().map(this::getPostById).map(post -> entityToPostResponseDto(post,authUser)).collect(Collectors.toList());
         }
         return Collections.emptyList();
     }
@@ -168,5 +198,11 @@ public class PostService {
 
     public void deleteAllPostByUserId(String id){
         postRepo.deleteByUserId(id);
+    }
+
+    public PostResponseDto getPostResponseDtoByPostId(String postId,String authToken) {
+        User authUser = userService.getAuthUser(authToken);
+        Post post = getPostById(postId);
+        return entityToPostResponseDto(post,authUser);
     }
 }

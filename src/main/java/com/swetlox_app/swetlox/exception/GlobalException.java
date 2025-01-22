@@ -1,6 +1,6 @@
 package com.swetlox_app.swetlox.exception;
 
-import com.swetlox_app.swetlox.controller.AuthResponse;
+import com.swetlox_app.swetlox.dto.AuthResponse;
 import com.swetlox_app.swetlox.exception.customException.InvalidOtpEx;
 import com.swetlox_app.swetlox.exception.customException.InvalidPasswordEx;
 import com.swetlox_app.swetlox.exception.customException.UserAlreadyExistEx;

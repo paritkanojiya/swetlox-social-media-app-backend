@@ -1,6 +1,8 @@
 package com.swetlox_app.swetlox.repository;
 
 import com.swetlox_app.swetlox.entity.Post;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -18,4 +20,6 @@ public interface PostRepo extends MongoRepository<Post,String> {
     Optional<Post> findByIdAndUserId(String postId,String authId);
 
     void deleteByUserId(String id);
+
+    Page<Post> findByUserId(String id, Pageable pageRequest);
 }

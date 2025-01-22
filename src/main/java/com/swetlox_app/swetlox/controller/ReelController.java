@@ -1,5 +1,6 @@
 package com.swetlox_app.swetlox.controller;
 
+import com.swetlox_app.swetlox.dto.comment.CommentRequestDto;
 import com.swetlox_app.swetlox.entity.Comment;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.model.ReelsModel;
@@ -58,11 +59,11 @@ public class ReelController {
     }
 
     @PostMapping("/comment")
-    public ResponseEntity<Comment> comment(@RequestBody Comment comment, @RequestHeader("Authorization") String token){
+    public ResponseEntity<Void> comment(@RequestBody CommentRequestDto comment, @RequestHeader("Authorization") String token){
         User authUser = userService.getAuthUser(token);
-        Comment savedComment = commentService.saveComment(comment, authUser);
+        commentService.saveComment(comment, authUser);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(savedComment);
+                .build();
     }
 
     @DeleteMapping("/comment/{commentId}")

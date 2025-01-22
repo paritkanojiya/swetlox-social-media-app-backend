@@ -1,6 +1,8 @@
 package com.swetlox_app.swetlox.service;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import com.swetlox_app.swetlox.allenum.MediaType;
 import com.swetlox_app.swetlox.entity.Post;
 import com.swetlox_app.swetlox.entity.Reels;
 import com.swetlox_app.swetlox.entity.User;
@@ -48,25 +50,12 @@ public class ReelsService {
     private final ReelsRepo reelsRepo;
     private final ModelMapper mapper;
     private final MongoTemplate mongoTemplate;
-    private static final String reelDirPath="src/main/resources/static/reels";
+    private final CloudService cloudService;
 
-    @PostConstruct
-    public void init(){
-
-        File file=new File(reelDirPath);
-        if(!file.exists()){
-            boolean mkdir = file.mkdir();
-            log.info("reel dir created {}",mkdir);
-        }
-
-    }
     public ReelsModel saveReel(User authUser, MultipartFile file,String caption) throws IOException {
 
-        Path path = Paths.get(reelDirPath, file.getOriginalFilename());
-        Files.copy(file.getInputStream(),path, StandardCopyOption.REPLACE_EXISTING);
-        String reelURL=reelDirPath+"/"+file.getOriginalFilename();
-        File file1=new File(reelURL);
-        String absoluteUrl = file1.getAbsoluteFile().toString();
+        Map uploaded = cloudService.upload(file, MediaType.VIDEO);
+        String absoluteUrl = (String) uploaded.get("url");
         Reels reels = Reels.builder().userId(authUser.getId())
                 .caption(caption)
                 .createdAt(LocalDateTime.now())

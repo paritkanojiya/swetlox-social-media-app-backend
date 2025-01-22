@@ -1,11 +1,14 @@
 spring:
   application:
     name: swetlox
+  profiles:
+    active:
+      - dev
   mail:
     host: smtp.gmail.com
     port: 465
-    username: ************@gmail.com
-    password: ***********
+    username: techsoftindia321@gmail.com
+    password: pzei pmxa ylhw xmzl
     properties:
       mail:
         smtp:
@@ -15,17 +18,12 @@ spring:
           ssl:
             trust: "*"        # Enable SSL (set to true if using SSL)
       default:
-        encoding: UTF-8     # Email encoding
-  data:
-    mongodb:
-      port: 27017
-      host: localhost
-      database: dbswetlox
+        encoding: UTF-8
   servlet:
-      multipart:
-        enabled: true
-        max-file-size: 10MB
-        max-request-size: 10MB
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
 server:
   port: 9000
   servlet:
@@ -34,3 +32,22 @@ jwt:
   secret: "w7sF7KhZj9UQj5lZ+3O7JH8c4u/D8AeO4jW9F9K4HJk="
   expiry-time: 100000000
   issuer: "swetlox"
+default:
+  capacity:
+    page:
+      size: 6
+oAuth2:
+  github:
+    clientId: Ov23liw87lyR9NqxEsVr
+    client-secret: bbc961b19f2cb19999c63301aaf4ccf139159b80
+    token-uri: https://github.com/login/oauth/access_token
+    fetch-data-uri: https://api.github.com/user
+    oauth2-login-uri: https://github.com/login/oauth/authorize
+  google:
+    clientId: 845997678744-j36r6ejcc50bf481vmuepk67ke72oa36.apps.googleusercontent.com
+    client-secret: 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
+    token-uri: https://oauth2.googleapis.com/token
+    fetch-data-uri: https://www.googleapis.com/oauth2/v3/userinfo
+    oauth2-login-uri: https://accounts.google.com/o/oauth2/v2/auth
+swetlox:
+  fronted-path: "http://localhost:3000"

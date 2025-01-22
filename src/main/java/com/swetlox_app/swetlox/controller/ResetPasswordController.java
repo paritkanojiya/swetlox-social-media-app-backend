@@ -1,5 +1,6 @@
 package com.swetlox_app.swetlox.controller;
 
+import com.swetlox_app.swetlox.dto.ForgotPasswordDto;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.service.ForgetPasswordService;
 import com.swetlox_app.swetlox.service.UserConnectionService;
@@ -18,19 +19,24 @@ public class ResetPasswordController {
     private final UserService userService;
     private final ForgetPasswordService forgetPasswordService;
 
-    @GetMapping("/forget-password")
-    public ResponseEntity<?> forgetPassword(@RequestHeader("Authorization") String token) throws MessagingException {
-        User authUser = userService.getAuthUser(token);
-        forgetPasswordService.resetTokenURL(authUser);
-        return ResponseEntity.ok("reset link send on your email");
+    @GetMapping("/forget-password/{email}")
+    public ResponseEntity<?> forgetPassword(@PathVariable("email") String email) throws MessagingException {
+        try{
+            User user = userService.getUser(email);
+            forgetPasswordService.resetTokenURL(user);
+            return ResponseEntity.ok("reset link send on your email");
+        }catch (Exception e){
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
     }
 
-    @GetMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestParam("token") String resetToken,@RequestHeader("Authorization") String token){
-        User authUser = userService.getAuthUser(token);
-        if(forgetPasswordService.validateToken(authUser.getId(),resetToken)){
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ForgotPasswordDto forgotPasswordDto){
+        try{
+            forgetPasswordService.validateToken(forgotPasswordDto);
             return ResponseEntity.ok("reset link is activate");
+        }catch (Exception e){
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("reset link expire or not valid");
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("reset link expire or not valid");
     }
 }

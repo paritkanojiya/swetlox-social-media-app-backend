@@ -1,15 +1,15 @@
 package com.swetlox_app.swetlox.service;
 
 
-import com.cloudinary.Cloudinary;
+import com.swetlox_app.swetlox.allenum.MediaType;
+import com.swetlox_app.swetlox.allenum.UserType;
+import com.swetlox_app.swetlox.dto.user.UserDto;
 import com.swetlox_app.swetlox.entity.Role;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.exception.customException.UserAlreadyExistEx;
-import com.swetlox_app.swetlox.dto.UserDto;
+import com.swetlox_app.swetlox.dto.user.UserDetailsDto;
 import com.swetlox_app.swetlox.model.ProfileModel;
-import com.swetlox_app.swetlox.repository.StoryRepo;
 import com.swetlox_app.swetlox.repository.UserRepo;
-import jakarta.annotation.PostConstruct;
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -18,11 +18,11 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.awt.print.Pageable;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -35,7 +35,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final MailService otpService;
     private final JwtService jwtService;
-    private final Cloudinary cloudinaryTemplate;
+    private final CloudService cloudService;
     private final ModelMapper mapper;
     @Lazy
     @Autowired
@@ -54,63 +54,58 @@ public class UserService {
         List<User> deletedUser = userRepository.findByIsVerifiedFalseAndCreatedAtBefore(tenMinutesAgo);
         userRepository.deleteAll(deletedUser);
     }
-    
-//    @PostConstruct
-//    public void loadAdmin(){
-//        Role role=new Role();
-//        role.setRole("ADMIN");
-//        User adminUser = User.builder()
-//                .userName("admin")
-//                .email("admin@gmail.com")
-//                .password(passwordEncoder.encode("parit2003"))
-//                .isVerified(true)
-//                .createdAt(LocalDateTime.now())
-//                .roleList(List.of(role))
-//                .build();
-//        userRepository.save(adminUser);
-//    }
-    
-    public User getUser(String email){
-        return userRepository.findByEmail(email);
-    }
 
-    public User saveUser(UserDto userDto) throws MessagingException, UserAlreadyExistEx {
-        User isAlreadyExits = userRepository.findByEmail(userDto.getEmail());
-        if(isAlreadyExits==null){
-            User user = User.builder().userName(userDto.getUserName())
-                    .fullName(userDto.getFullName())
-                    .email(userDto.getEmail())
-                    .password(passwordEncoder.encode(userDto.getPassword()))
-                    .roleList(List.of(new Role("ROLE_USER")))
-                    .isVerified(false)
-                    .profileURL("https://res.cloudinary.com/dkbbhmnk6/image/upload/v1724336510/default_ia7jfs.jpg")
-                    .createdAt(LocalDateTime.now())
-                    .build();
+    public User getUser(String email){
+        return userRepository.findByEmail(email).orElseThrow(()-> new UsernameNotFoundException("provided user email is not found"));
+    }
+    
+    public User saveUser(UserDetailsDto userDto) throws UserAlreadyExistEx, MessagingException {
+        Optional<User> optionalUser = userRepository.findByEmail(userDto.getEmail());
+        if(optionalUser.isEmpty()){
+            User user = toEntity(userDto);
+            user.setUserType(UserType.EMAIL);
             otpService.sendOtp(user.getEmail());
             return userRepository.save(user);
         }
-        if(Boolean.FALSE.equals(isAlreadyExits.getIsVerified())){
-            otpService.sendOtp(isAlreadyExits.getEmail());
-            return isAlreadyExits;
+        User user = optionalUser.get();
+        if(Boolean.FALSE.equals(user.getIsVerified())){
+            otpService.sendOtp(user.getEmail());
+            return user;
         }
         throw new UserAlreadyExistEx(userDto.getEmail()+ " user already present");
     }
-
-    public void saveOAut2User(UserDto user){
-        User isExist = userRepository.findByEmail(user.getEmail());
-        if(isExist==null) {
-            User oAuth2User = User.builder()
-                    .userName(user.getUserName())
-                    .fullName(user.getFullName())
-                    .email(user.getEmail())
-                    .roleList(user.getRoleList())
-                    .createdAt(LocalDateTime.now())
-                    .isVerified(true)
-                    .profileURL("https://res.cloudinary.com/dkbbhmnk6/image/upload/v1724336510/default_ia7jfs.jpg")
-                    .isOAuth2User(true)
-                    .build();
-            userRepository.save(oAuth2User);
+    
+    public User saveOAuth2User(UserDetailsDto userDto){
+        User user = toEntity(userDto);
+        user.setIsVerified(true);
+        return userRepository.save(user);
+    }
+    
+    
+    public void changeVerificationStatus(String email){
+        User user = getUser(email);
+        if(!user.getIsVerified()){
+            user.setIsVerified(true);
+            updateUser(user);
         }
+    }
+
+    private User toEntity(UserDetailsDto userDto){
+        String encodedPassword=userDto.getPassword()!=null ? passwordEncoder.encode(userDto.getPassword()) : null;
+        return User.builder().userName(userDto.getUserName())
+                .fullName(userDto.getFullName())
+                .email(userDto.getEmail())
+                .password(encodedPassword)
+                .roleList(List.of(new Role("ROLE_USER")))
+                .userType(userDto.getUserType())
+                .isVerified(false)
+                .profileURL("https://res.cloudinary.com/dkbbhmnk6/image/upload/v1724336510/default_ia7jfs.jpg")
+                .build();
+    }
+
+    public void updatePassword(User user,String rawNewPassword){
+        user.setPassword(passwordEncoder.encode(rawNewPassword));
+        userRepository.save(user);
     }
 
     public void updateUser(User user){
@@ -124,7 +119,12 @@ public class UserService {
 
     public User getAuthUser(String token){
         String userEmail = jwtService.extractUserNameFromToken(token.substring(7));
-        return userRepository.findByEmail(userEmail);
+        return userRepository.findByEmail(userEmail).orElseThrow(()-> new RuntimeException("User not found"));
+    }
+
+    public boolean isUserExistById(String id){return userRepository.existsById(id);}
+    public boolean isUserExistByEmail(String email){
+        return userRepository.existsByEmail(email);
     }
 
     public List<Map<String, Object>> searchUser(String q, User authUser) {
@@ -134,13 +134,16 @@ public class UserService {
         } else {
             userRepository.findByUserName(q).forEach(user -> {
                 boolean followerContainsUserId = userConnectionService.existsByIdAndFollowerContains(authUser.getId(), user.getId());
-                boolean followingContainsUserId = userConnectionService.existsByIdAndFollowingContains(authUser.getId(), user.getId());
-                boolean userIsFollowingAuth = userConnectionService.existsByIdAndFollowingContains(user.getId(), authUser.getId());
-
+                boolean isRequestPending=userConnectionService.isConnectionRequestPending(user.getId(),authUser.getId());
+                boolean followingContainsUserId = userConnectionService.existsByIdAndFollowingContains(user.getId(),authUser.getId());
+                boolean userIsFollowingAuth = userConnectionService.existsByIdAndFollowingContains(authUser.getId(), user.getId());
+                System.out.println(user.getUserName()+" following "+followingContainsUserId+" follower "+followerContainsUserId+" userIsFollowingAuth "+userIsFollowingAuth);
                 Map<String, Object> userMap = Map.of(
                         "userId", user.getId(),
+                        "email",user.getEmail(),
                         "userName", user.getUserName(),
                         "follower", followerContainsUserId,
+                        "requested",isRequestPending,
                         "following", followingContainsUserId,
                         "userIsFollowingAuth", userIsFollowingAuth,
                         "profileURL",user.getProfileURL()
@@ -152,35 +155,85 @@ public class UserService {
     }
 
 
-    public UserDto changeProfileImage(MultipartFile file,User authUser) throws IOException {
-        Map uploaded = cloudinaryTemplate.uploader().upload(file.getBytes(), Collections.emptyMap());
+    public UserDetailsDto changeProfileImage(MultipartFile file, User authUser) throws IOException {
+        Map uploaded = cloudService.upload(file, MediaType.IMAGE);
         String profileURL=(String)uploaded.get("url");
         authUser.setProfileURL(profileURL);
         User updatedUser = userRepository.save(authUser);
-        return mapper.map(updatedUser, UserDto.class);
+        return mapper.map(updatedUser, UserDetailsDto.class);
     }
 
-    public ProfileModel profileData(User authUser){
-        List<String> followerList = userConnectionService.getFollowerList(authUser.getId());
-        List<String> followingList = userConnectionService.getFollowingList(authUser.getId());
-        Integer userPostCount = postService.getUserPostCount(authUser.getId());
+    public ProfileModel profileData(String otherUserId,String authToken){
+        User authUser = getAuthUser(authToken);
+        boolean isAuthUserEmail= authUser.getId().equals(otherUserId);
+        if(isAuthUserEmail){
+            return getSelfProfile(authUser);
+        }
+        return getOtherUserProfile(authUser,otherUserId);
+    }
 
-        int follower = (followerList != null) ? followerList.size() : 0;
-        int following = (followingList != null) ? followingList.size() : 0;
+    private ProfileModel getOtherUserProfile(User authUser, String otherUserId) {
+        User otherUser = getUserById(otherUserId);
+        return profileEntityToDTO(
+                authUser.getId(),
+                otherUser.getFullName(),
+                otherUser.getUserName(),
+                otherUser.getProfileURL(),
+                userConnectionService.getFollowerCount(otherUser.getId()),
+                userConnectionService.getFollowingCount(otherUser.getId()),
+                postService.getUserPostCount(otherUser.getId()),
+                otherUser.getBio(),
+                userConnectionService.existsByIdAndFollowingContains(authUser.getId(), otherUser.getId()),
+                false
+        );
+    }
 
-        return ProfileModel.builder().userName(authUser.getUserName())
-                .fullName(authUser.getFullName())
-                .profileURL(authUser.getProfileURL())
+    private ProfileModel getSelfProfile(User authUser) {
+        return profileEntityToDTO(
+                authUser.getId(),
+                authUser.getFullName(),
+                authUser.getUserName(),
+                authUser.getProfileURL(),
+                userConnectionService.getFollowerCount(authUser.getId()),
+                userConnectionService.getFollowingCount(authUser.getId()),
+                postService.getUserPostCount(authUser.getId()),
+                authUser.getBio(),
+                true,
+                true
+        );
+    }
+
+    public ProfileModel profileEntityToDTO(String userId,String fullName, String userName, String profileURL, Integer follower, Integer following, Integer postCount, List<String> bio, boolean isAuthUserFollow, boolean isSelfUser){
+        return ProfileModel.builder().fullName(fullName)
+                .userId(userId)
+                .isAuthUserFollow(isAuthUserFollow)
+                .postCount(postCount)
+                .bio(bio)
+                .isSelfUser(isSelfUser)
+                .profileURL(profileURL)
                 .follower(follower)
                 .following(following)
-                .bio(authUser.getBio())
-                .postCount(userPostCount)
+                .userName(userName)
                 .build();
     }
 
-    public List<UserDto> findUserConnection(String authUser){
-        return userConnectionService.getFollowerAndFollowing(authUser);
+    public UserDto getUserDtoById(String userId){
+        User user = getUserById(userId);
+        return UserDto.builder().userId(user.getId())
+                .userName(user.getUserName())
+                .fullName(user.getFullName())
+                .profileURL(user.getProfileURL()).build();
     }
+
+    public UserDto getUserDtoByUser(User user){
+        return UserDto.builder().userId(user.getId())
+                .userName(user.getUserName())
+                .fullName(user.getFullName())
+                .profileURL(user.getProfileURL()).build();
+    }
+//    public List<UserDto> findUserConnection(String authUser){
+//        return userConnectionService.getFollowerAndFollowing(authUser);
+//    }
 
     public long getNumOfUser(){
         return userRepository.count();

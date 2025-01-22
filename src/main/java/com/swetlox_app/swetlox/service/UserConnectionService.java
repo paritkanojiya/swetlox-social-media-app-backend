@@ -1,17 +1,26 @@
 package com.swetlox_app.swetlox.service;
 
-import com.swetlox_app.swetlox.controller.UserController;
-import com.swetlox_app.swetlox.dto.UserDto;
+import com.swetlox_app.swetlox.allenum.ConnectionRequestStatus;
+import com.swetlox_app.swetlox.allenum.NotificationType;
+import com.swetlox_app.swetlox.dto.notification.ConnectionRequestNotificationDto;
+import com.swetlox_app.swetlox.dto.notification.NotificationDto;
+import com.swetlox_app.swetlox.dto.UserConnectionDTO;
+import com.swetlox_app.swetlox.dto.user.UserDto;
+import com.swetlox_app.swetlox.entity.ConnectionRequest;
+import com.swetlox_app.swetlox.entity.RecentChatHistory;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.entity.UserConnection;
-import com.swetlox_app.swetlox.event.SendConnectionRequestEvent;
+import com.swetlox_app.swetlox.event.SendNotificationEvent;
+import com.swetlox_app.swetlox.repository.ConnectionRequestRepo;
 import com.swetlox_app.swetlox.repository.UserConnectionRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,48 +33,122 @@ import java.util.stream.Collectors;
 public class UserConnectionService {
 
     private final UserConnectionRepo userConnectionRepo;
+    private final ConnectionRequestRepo connectionRequestRepo;
     private final ApplicationEventPublisher eventPublisher;
+    private final ChatRoomService chatRoomService;
     @Autowired
     private  UserService userService;
+    @Value("${default.capacity.page.size}")
+    private int DEFAULT_CAPACITY_FOR_PAGE_SIZE;
 
-    @Async(value = "taskExecutor")
-    public void following(String requestedUserId, User authUser){
 
-        eventPublisher.publishEvent(new SendConnectionRequestEvent(this,authUser.getId(),authUser.getUserName(),requestedUserId));
+    public void followRequest(String requestedUserId, User authUser){
+        User user = userService.getUserById(requestedUserId);
+        ConnectionRequest connectionRequest = saveConnectionRequest(requestedUserId, authUser.getId());
+        UserDto userDto = userService.getUserDtoByUser(authUser);
+        NotificationDto notificationDto = new ConnectionRequestNotificationDto(connectionRequest.getId(),userDto,user.getEmail(),"sent you a connection request", NotificationType.CONNECTION_REQUEST);
+        eventPublisher.publishEvent(new SendNotificationEvent(this,notificationDto));
     }
 
+    public List<ConnectionRequestNotificationDto> getAllPendingConnectionRequest(String authToken){
+        User authUser = userService.getAuthUser(authToken);
+        return connectionRequestRepo.findByReceiverIdAndStatus(authUser.getId(),ConnectionRequestStatus.PENDING).stream().map(this::entityToPendingConnectionRequestDto).collect(Collectors.toList());
+    }
+
+    public boolean isConnectionRequestPending(String receiverId,String senderId){
+       return connectionRequestRepo.existsBySenderIdAndReceiverIdAndStatus(senderId,receiverId,ConnectionRequestStatus.PENDING);
+    }
+
+    public boolean isAlreadyExistConnectionRequest(String requestId,String authUserId){
+        return connectionRequestRepo.findBySenderIdAndReceiverId(authUserId,requestId).isPresent();
+    }
+
+    public ConnectionRequestNotificationDto entityToPendingConnectionRequestDto(ConnectionRequest connectionRequest){
+        User senderUser = userService.getUserById(connectionRequest.getSenderId());
+        User recieverUser=userService.getUserById(connectionRequest.getReceiverId());
+        UserDto userDto = userService.getUserDtoByUser(senderUser);
+        return new ConnectionRequestNotificationDto(connectionRequest.getId(),userDto,recieverUser.getEmail(),"sent to a connection request",NotificationType.CONNECTION_REQUEST);
+    }
+
+    public ConnectionRequest saveConnectionRequest(String requestId,String authUserId){
+        boolean connectionRequestPending = isConnectionRequestPending(requestId, authUserId);
+        if(!connectionRequestPending) {
+            ConnectionRequest connectionRequest = ConnectionRequest.builder()
+                    .senderId(authUserId)
+                    .receiverId(requestId)
+                    .status(ConnectionRequestStatus.PENDING)
+                    .build();
+            return connectionRequestRepo.save(connectionRequest);
+        }
+        throw new RuntimeException("Request already send");
+    }
+
+    
+    public ConnectionRequest getConnectionRequest(String requestedId,String authUserId){
+        return connectionRequestRepo.findBySenderIdAndReceiverId(requestedId,authUserId).orElseThrow(()->new RuntimeException("Not found user connection"));
+    }
+    
     @Transactional
     public void acceptRequest(User authUser,String requestedUserId){
+        ConnectionRequest connectionRequest = getConnectionRequest(requestedUserId, authUser.getId());
+        connectionRequest.setStatus(ConnectionRequestStatus.ACCEPTED);
+        update(connectionRequest);
+        UserConnection userConnection =createNewConnection(authUser.getId(),requestedUserId);
+        userConnectionRepo.save(userConnection);
+    }
 
-        UserConnection authUserConnection = userConnectionRepo.findByUserId(authUser.getId()).orElseGet(() -> createNewConnection(authUser.getId()));
-        UserConnection requestedUserConnection = userConnectionRepo.findByUserId(requestedUserId).orElseGet(() -> createNewConnection(requestedUserId));
-        if(!authUserConnection.getFollowing().contains(requestedUserId)){
-            authUserConnection.getFollowing().add(requestedUserId);
-        }
-        if(!requestedUserConnection.getFollower().contains(authUser.getId())){
-            requestedUserConnection.getFollower().add(authUser.getId());
-        }
-        userConnectionRepo.saveAll(Arrays.asList(authUserConnection,requestedUserConnection));
+    public void update(ConnectionRequest connectionRequest){
+        connectionRequestRepo.save(connectionRequest);
+    }
+
+    private UserConnection createNewConnection(String authId,String requestedUserId) {
+        return UserConnection.builder()
+                .userId(authId)
+                .followerId(requestedUserId)
+                .build();
     }
     
-    private UserConnection createNewConnection(String authId) {
-        UserConnection userConnection=new UserConnection();
-        userConnection.setUserId(authId);
-        userConnection.setFollowing(new ArrayList<>());
-        userConnection.setFollower(new ArrayList<>());
-        return userConnection;
-    }
-    
-    public List<String> getFollowerList(String authId){
-        UserConnection userConnection = userConnectionRepo.findByUserId(authId).get();
-        return userConnection.getFollower();
+    public List<UserConnection> getFollowerList(String authId){
+        List<UserConnection> userConnectionList = userConnectionRepo.findByUserId(authId);
+        if(!userConnectionList.isEmpty()){
+            return userConnectionList;
+        }
+        return Collections.emptyList();
     }
 
+//    public List<String> getFollowerList(String authId,Integer pageNum){
+//        Optional<UserConnection> userConnectionOptional = userConnectionRepo.findByUserId(authId);
+//        if(userConnectionOptional.isPresent()){
+//            List<String> follower = userConnectionOptional.get().getFollower();
+//            int followerSize=follower.size();
+//            int totalPage=followerSize/DEFAULT_CAPACITY_FOR_PAGE_SIZE;
+//            return follower.subList(pageNum,)
+//        }
+//        return Collections.emptyList();
+//    }
 
-    public List<String> getFollowingList(String authId){
-        UserConnection userConnection = userConnectionRepo.findByUserId(authId).get();
-        return userConnection.getFollowing();
+    public List<UserConnection> getFollowingList(String authId){
+        List<UserConnection> connections = userConnectionRepo.findByFollowerId(authId);
+        if(!connections.isEmpty()){
+            return connections;
+        }
+        return Collections.emptyList();
     }
+//
+//    public List<String> getFollowingList(String authId,Integer pageNum){
+//        Optional<UserConnection> userConnectionOptional = userConnectionRepo.findByUserId(authId);
+//        if(userConnectionOptional.isPresent()){
+//            return userConnectionOptional.get().getFollowing();
+//        }
+//        return Collections.emptyList();
+//    }
+
+    public List<UserConnectionDTO> getUserChatHistory(String token){
+        User authUser = userService.getAuthUser(token);
+        List<RecentChatHistory> recentChatHistoryList = chatRoomService.getRecentChatHistory(authUser.getId());
+        return recentChatHistoryList.stream().map(recentChatHistory -> this.entityToUserConnectionDTO(recentChatHistory.getUserId(),authUser)).collect(Collectors.toList());
+    }
+
 
     public boolean existsByIdAndFollowerContains(String authId,String userId){
         return userConnectionRepo.existsByIdAndFollowerContains(authId,userId);
@@ -74,54 +157,80 @@ public class UserConnectionService {
         return userConnectionRepo.existsByIdAndFollowingContains(authId,userId);
     }
     
-    public List<UserDto> getFollowerAndFollowing(String authId){
-        UserConnection userConnection = userConnectionRepo.findByUserId(authId).orElseThrow();
-        List<UserDto> userDtoList=new ArrayList<>();
-        Set<String> uniqueId=new HashSet<>();
-        userConnection.getFollower().stream().filter(uniqueId::add).map(userService::getUserById).map(this::convertToUserDto).forEach( (userDtoList::add));
-        userConnection.getFollowing().stream().filter(uniqueId::add).map(userService::getUserById).map(this::convertToUserDto).forEach( (userDtoList::add));
-        return userDtoList;
+    public List<UserConnectionDTO> getFollowerAndFollowing(String authToken){
+        User authUser = userService.getAuthUser(authToken);
+        List<UserConnection> followerList = getFollowerList(authUser.
+                getId());
+        List<UserConnection> followingList = getFollowingList(authUser.getId());
+        Set<UserConnectionDTO> userDtoList=new HashSet<>();
+        List<UserConnectionDTO> followerUserDTO = followerList.stream().map(userConnection -> this.entityToUserConnectionDTO(userConnection.getFollowerId(),authUser)).toList();
+        List<UserConnectionDTO> followingUserDTO = followingList.stream().map(userConnection -> this.entityToUserConnectionDTO(userConnection.getUserId(),authUser)).toList();
+        userDtoList.addAll(followingUserDTO);
+        userDtoList.addAll(followerUserDTO);
+        return new ArrayList<>(userDtoList);
     }
 
-    private UserDto convertToUserDto(User user){
-        return UserDto.builder()
+    public Page<UserConnectionDTO> getFollowing(String authToken,Integer pageNum){
+        User authUser = userService.getAuthUser(authToken);
+        PageRequest pageRequest = PageRequest.of(pageNum, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.Direction.DESC, "createdAt");
+        return userConnectionRepo.findByFollowerId(authUser.getId(), pageRequest).map(userConnection -> entityToUserConnectionDTO(userConnection.getUserId(), authUser));
+    }
+
+    public List<UserConnectionDTO> getFollowing(String otherUserId,String authToken){
+        User authUser = userService.getAuthUser(authToken);
+        PageRequest pageRequest = PageRequest.of(0, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return userConnectionRepo.findByFollowerId(otherUserId, pageRequest).map(userConnection -> entityToUserConnectionDTO(userConnection.getUserId(), authUser)).toList();
+    }
+
+    public Page<UserConnectionDTO> getFollower(String authToken,Integer pageNum){
+        User authUser = userService.getAuthUser(authToken);
+        PageRequest pageRequest = PageRequest.of(pageNum, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.Direction.DESC, "createdAt");
+        return userConnectionRepo.findByUserId(authUser.getId(), pageRequest).map(userConnection -> entityToUserConnectionDTO(userConnection.getFollowerId(), authUser));
+    }
+
+    public List<UserConnectionDTO> getFollower(String otherUserId,String authToken){
+        User authUser = userService.getAuthUser(authToken);
+        PageRequest pageRequest = PageRequest.of(0, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return userConnectionRepo.findByUserId(otherUserId,pageRequest).map(userConnection -> entityToUserConnectionDTO(userConnection.getFollowerId(), authUser)).toList();
+    }
+
+    public Page<UserConnectionDTO> getUserConnection(String type,String authToken,Integer pageNum){
+        type=type.trim().toLowerCase();
+        if(type.equals("follower")) return getFollower(authToken,pageNum);
+        return getFollowing(authToken,pageNum);
+    }
+
+    public List<UserConnectionDTO> getOtherUserConnection(String otherUserId,String type,String authToken){
+        type=type.trim().toLowerCase();
+        if(type.equals("follower")) return getFollower(otherUserId,authToken);
+        return getFollowing(otherUserId,authToken);
+    }
+
+    private UserConnectionDTO entityToUserConnectionDTO(String userId,User authUser){
+        User user = userService.getUserById(userId);
+        System.out.println(user);
+        boolean followerContains = existsByIdAndFollowerContains(user.getId(), authUser.getId());
+        return UserConnectionDTO.builder()
+                .userId(user.getId())
                 .userName(user.getUserName())
                 .fullName(user.getFullName())
-                .email(user.getEmail())
                 .profileURL(user.getProfileURL())
-                .build();
+                .isRequestPending(isConnectionRequestPending(user.getId(),authUser.getId()))
+                .isAuthUserFollow(followerContains).build();
     }
 
     public void deleteUserFromAllConnections(String id) {
-        List<String> followingList = getFollowingList(id);
-        List<String> followerList = getFollowerList(id);
-        followerList.stream()
-                .map(this::userConnection)
-                .forEach(user -> {
-                    if (user != null && user.getFollower() != null) {
-                        boolean removed = user.getFollower().remove(id);
-                        if (removed) {
-                            userConnectionRepo.save(user);
-                            System.out.println("Removed user " + id + " from follower of " + user.getUserId());
-                        }
-                    }
-                });
-        followingList.stream()
-                .map(this::userConnection)
-                .forEach(user -> {
-                    if (user != null && user.getFollowing() != null) {
-                        boolean removed = user.getFollowing().remove(id);
-                        if (removed) {
-                            userConnectionRepo.save(user);
-                            System.out.println("Removed user " + id + " from following list of " + user.getUserId());
-                        }
-                    }
-                });
         userConnectionRepo.deleteByUserId(id);
+        userConnectionRepo.deleteByFollowerId(id);
+    }
+
+    public Integer getFollowerCount(String userId){
+        return userConnectionRepo.findByUserId(userId).size();
     }
 
 
-    public UserConnection userConnection(String id){
-        return userConnectionRepo.findByUserId(id).get();
+    public Integer getFollowingCount(String userId){
+        return userConnectionRepo.findByFollowerId(userId).size();
     }
+
 }
