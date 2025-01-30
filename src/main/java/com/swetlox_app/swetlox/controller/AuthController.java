@@ -14,6 +14,7 @@ import com.swetlox_app.swetlox.service.UserService;
 import com.swetlox_app.swetlox.statergy.OAuth2Factory;
 import com.swetlox_app.swetlox.statergy.OAuthAuthenticationStatrgey;
 import jakarta.mail.MessagingException;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,20 +45,27 @@ public class AuthController {
     private final OAuth2Service oAuth2Service;
 
     @PostMapping("/sign-up")
-    public ResponseEntity<User> signUp(@RequestBody UserDetailsDto userDto) throws MessagingException, UserAlreadyExistEx {
-        User savedUser = userService.saveUser(userDto);
-        return ResponseEntity.ok(savedUser);
+    public ResponseEntity<?> signUp(@RequestBody UserDetailsDto userDto) throws MessagingException, UserAlreadyExistEx {
+        try{
+            User savedUser = userService.saveUser(userDto);
+            return ResponseEntity.ok(savedUser);
+        }catch (Exception e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+
     }
 
     @GetMapping("/otp/verify/{email}/{otp}")
-    public ResponseEntity<AuthResponse> verifyOtp(@PathVariable("email") String email, @PathVariable("otp") String otp) throws InvalidOtpEx {
-            otpService.validateOtp(otp);
-            userService.changeVerificationStatus(email);
-            AuthResponse authResponse = AuthResponse.builder().message("verification complete")
-                    .httpStatus(HttpStatus.OK)
-                    .build();
-            otpService.clearCache();
-            return ResponseEntity.ok(authResponse);
+    public ResponseEntity<AuthResponse> verifyOtp(@PathVariable("email") String email, @PathVariable("otp") String otp, HttpServletResponse response) throws InvalidOtpEx {
+        otpService.validateOtp(otp,email);
+        User user = userService.getUser(email);
+        user.setIsVerified(true);
+        userService.updateUser(user);
+
+        AuthResponse authResponse = AuthResponse.builder().message("verification complete")
+                .httpStatus(HttpStatus.OK)
+                .build();
+        return ResponseEntity.ok(authResponse);
     }
 
     @PostMapping("/sign-in")
@@ -82,7 +90,7 @@ public class AuthController {
             String generatedToken = jwtService.generateToken(oAuth2User.getEmail());
             return new RedirectView(FRONTED_PATH+"?authToken="+generatedToken);
         }catch (UserAlreadyExistEx | Exception e){
-            return new RedirectView(FRONTED_PATH);
+            return new RedirectView(FRONTED_PATH+"?error="+e.getMessage());
         }
     }
 

@@ -1,6 +1,8 @@
 package com.swetlox_app.swetlox.service;
 
+import com.swetlox_app.swetlox.entity.UserOtp;
 import com.swetlox_app.swetlox.exception.customException.InvalidOtpEx;
+import com.swetlox_app.swetlox.repository.UserOtpRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.mail.*;
 import jakarta.mail.internet.InternetAddress;
@@ -19,20 +21,21 @@ import java.util.Properties;
 @Slf4j
 public class MailService {
 
-    private String otpCache;
     private Session session;
+    private final UserOtpRepository userOtpRepo;
 
+    @PostConstruct
     public void init(){
         Properties prop = new Properties();
-        prop.put("mail.smtp.host","smtp.gmail.com");
-        prop.put("mail.smtp.port","465");
-        prop.put("mail.smtp.auth","true");
-        prop.put("mail.smtp.ssl.enable","true");
-        prop.put("mail.smtp.ssl.trust","*");
+        prop.put("mail.smtp.host", "smtp.gmail.com");
+        prop.put("mail.smtp.port", "465");
+        prop.put("mail.smtp.auth", "true");
+        prop.put("mail.smtp.ssl.enable", "true");
+        prop.put("mail.smtp.ssl.trust", "smtp.gmail.com");
         Authenticator authenticator=new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication("techsoftindia321@gmail.com","pzei pmxa ylhw xmzl");
+                return new PasswordAuthentication("techsoftindia321@gmail.com","lgrd aion klni tqhm");
             }
         };
         this.session=Session.getInstance(prop,authenticator);
@@ -50,7 +53,15 @@ public class MailService {
         mimeMessage.setContent(getEmailBody(otp), "text/html");
 //        Transport.send(mimeMessage);
         log.info("otp : {}",otp);
-        otpCache=otp;
+        UserOtp userOtp = userOtpRepo.findByEmail(to);
+        if(userOtp!=null) {
+            userOtp.setOtp(otp);
+            userOtpRepo.save(userOtp);
+        }else{
+            userOtpRepo.save(UserOtp.builder()
+                    .otp(otp)
+                    .email(to).build());
+        }
     }
 
     public void sendResetLink(String to,String resetLink) throws MessagingException {
@@ -98,20 +109,17 @@ public class MailService {
                 "        <p style=\"font-size: 14px; color: #1abc9c; text-align: center; word-wrap: break-word;\">\n" +
                 "            <a href=\"{{resetLink}}\" style=\"color: #1abc9c; text-decoration: none;\">{{resetLink}}</a>\n" +
                 "        </p>\n" +
-                "        <p style=\"font-size: 12px; color: #95a5a6; text-align: center; margin-top: 20px;\">This link will expire in 30 minutes.</p>\n" +
+                "        <p style=\"font-size: 12px; color: #95a5a6; text-align: center; margin-top: 20px;\">This link will expire in 15 minutes.</p>\n" +
                 "        <p style=\"font-size: 12px; color: #95a5a6; text-align: center;\">Thank you,</p>\n" +
                 "        <p style=\"font-size: 12px; color: #95a5a6; text-align: center;\">The Swetlox Team</p>\n" +
                 "    </div>\n" +
                 "</body>\n";
         return body.replace("{{resetLink}}",resetLink);
     }
-    public void validateOtp(String otp) throws InvalidOtpEx {
-        if(!otp.equals(otpCache)){
+    public void validateOtp(String otp,String email) throws InvalidOtpEx {
+        UserOtp userOtp = userOtpRepo.findByEmail(email);
+        if(userOtp==null  || !userOtp.getOtp().equals(otp)){
             throw new InvalidOtpEx("invalid otp "+otp);
         }
-    }
-
-    public void clearCache(){
-        otpCache=null;
     }
 }

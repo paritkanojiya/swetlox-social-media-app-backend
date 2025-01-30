@@ -42,9 +42,16 @@ public class UserController {
         return ResponseEntity.ok(authResponse);
     }
 
-    @GetMapping("/unfollow-request/{id}")
+    @GetMapping("/unfollow/{id}")
     public void unfollowRequest(@PathVariable("id") String userId,@RequestHeader("Authorization") String token){
+        userConnectionService.unfollow(userId,token);
+    }
 
+
+
+    @GetMapping("/remove/friendShip/{id}")
+    public void remove(@PathVariable("id") String userId,@RequestHeader("Authorization") String token){
+        userConnectionService.removeFriendShip(userId,token);
     }
 
     @GetMapping("/get-user/{id}")
@@ -58,6 +65,7 @@ public class UserController {
                 .build();
         return ResponseEntity.ok(userDto);
     }
+
 
     @GetMapping("/get-all-pending-request")
     public ResponseEntity<List<ConnectionRequestNotificationDto>> getAllPendingConnectionRequest(@RequestHeader("Authorization") String token){
@@ -73,38 +81,38 @@ public class UserController {
         return ResponseEntity.ok("request accepted");
     }
 
-//    @GetMapping("/get-follower")
-//    public ResponseEntity<List<String>> getFollower(@RequestHeader("Authorization") String token){
-//        User authUser = userService.getAuthUser(token);
-//        List<String> followerList = userConnectionService.getFollowerList(authUser.getId());
-//        return ResponseEntity.ok(followerList);
-//    }
+    @GetMapping("/rejectRequest/{id}")
+    public void rejectRequest(@PathVariable("id") String requestedUserId,@RequestHeader("Authorization") String token){
 
-//    @GetMapping("/get-following")
-//    public ResponseEntity<List<String>> getFollowing(@RequestHeader("Authorization") String token){
-//        User authUser = userService.getAuthUser(token);
-//        List<String> followerList = userConnectionService.getFollowingList(authUser.getId());
-//        return ResponseEntity.ok(followerList);
-//    }
+        userConnectionService.rejectFriendRequest(requestedUserId,token);
+    }
+
+    @DeleteMapping("/delete-account")
+    public ResponseEntity<?> deleteAccount(@RequestHeader("Authorization") String token){
+        try {
+            userService.deleteAccountPermanentByToken(token);
+            return ResponseEntity.ok().build();
+        }catch (Exception e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+
+
+    }
 
     @PostMapping("/update-profile")
-    public ResponseEntity<?> updateProfile(@ModelAttribute User user,@RequestHeader("Authorization") String token){
-        User authUser = userService.getAuthUser(token);
-        if(!user.getUserName().isEmpty()){
-            authUser.setUserName(user.getUserName());
+    public ResponseEntity<?> updateProfile(@RequestBody User user,@RequestHeader("Authorization") String token){
+        try{
+            userService.updateProfile(user,token);
+            return ResponseEntity.ok("updated");
+        }catch (Exception ex){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
         }
-        if(!user.getBio().isEmpty()){
-            authUser.setBio(user.getBio());
-        }
-        userService.updateUser(authUser);
-        return ResponseEntity.ok("updated");
+
     }
     @GetMapping("/auth-status")
     public ResponseEntity<UserDetailsDto> getAuthStatus(@RequestHeader("Authorization") String token){
-        User authUser = userService.getAuthUser(token);
-        UserDetailsDto userDto = mapper.map(authUser, UserDetailsDto.class);
-        userDto.setPassword(null);
-        return ResponseEntity.ok(userDto);
+        UserDetailsDto userDetailsDto = userService.getUserDetailsDto(token);
+        return ResponseEntity.ok(userDetailsDto);
     }
     
     @PostMapping("/change-profile-image")

@@ -13,5 +13,6 @@ public class StoryDto {
     private MediaType mediaType;
     private String mediaURL;
     private Double duration;
+    private boolean isStoryLike;
     private LocalDateTime createdAt;
 }

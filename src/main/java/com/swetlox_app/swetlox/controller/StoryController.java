@@ -5,6 +5,7 @@ import com.swetlox_app.swetlox.allenum.MediaType;
 import com.swetlox_app.swetlox.dto.comment.CommentRequestDto;
 import com.swetlox_app.swetlox.dto.comment.CommentResponseDto;
 import com.swetlox_app.swetlox.dto.like.LikeResponseDto;
+import com.swetlox_app.swetlox.dto.reel.ReelResponseDto;
 import com.swetlox_app.swetlox.dto.story.StoryRequestDto;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.dto.story.StoryResponseDto;
@@ -48,8 +49,7 @@ public class StoryController {
 
     @PostMapping("/comment")
     public void doComment(@RequestBody CommentRequestDto commentRequestDto,@RequestHeader("Authorization") String authToken){
-        User authUser = userService.getAuthUser(authToken);
-        commentService.saveComment(commentRequestDto,authUser);
+        storyService.comment(commentRequestDto,authToken);
     }
 
     @PostMapping("/like/{storyId}")
@@ -58,15 +58,25 @@ public class StoryController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
+    @PostMapping("/unlike/{storyId}")
+    public ResponseEntity<String> unlikeStory(@PathVariable("storyId") String storyId,@RequestHeader("Authorization") String token){
+        boolean isUnlike = storyService.unlike(storyId, token);
+        if(isUnlike) return ResponseEntity.ok("unlike successFull");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
+
     @GetMapping("/like/{storyId}")
     public ResponseEntity<Page<LikeResponseDto>> getLikeInfo(@PathVariable("storyId") String storyId, @RequestParam("pageNum") Integer pageNum, @RequestHeader("Authorization") String token){
         Page<LikeResponseDto> likeResponseDtoPage = storyService.getLikeResponseDtoByEntityId(storyId, pageNum);
         return ResponseEntity.ok(likeResponseDtoPage);
     }
 
+
     @GetMapping("/comment/{entityId}")
     public ResponseEntity<Page<CommentResponseDto>> getComment(@PathVariable("entityId") String entityId,@RequestParam(value = "pageNum",required = false,defaultValue = "0") Integer pageNum){
         Page<CommentResponseDto> commentResponseDtoList = commentService.getCommentByEntityId(entityId, pageNum);
         return ResponseEntity.ok(commentResponseDtoList);
     }
+
+
 }

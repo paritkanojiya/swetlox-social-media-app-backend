@@ -17,7 +17,6 @@ public class Post {
     private String id;
     private String userId;
     private String caption;
-    private List<String> likedUserList;
     private String postURL;
     private LocalDateTime createdAt;
     private boolean privatePost;

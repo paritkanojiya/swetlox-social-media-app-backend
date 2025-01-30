@@ -40,6 +40,9 @@ public class UserDetailsImpl implements UserDetails {
     public boolean isVerified(){
         return user.getIsVerified();
     }
+    public boolean isSuspense(){
+        return user.isSuspense();
+    }
     @Override
     public boolean isAccountNonExpired() {
         return false;

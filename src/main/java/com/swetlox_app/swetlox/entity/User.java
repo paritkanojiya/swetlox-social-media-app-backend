@@ -32,6 +32,7 @@ public class User {
     @LastModifiedDate
     private LocalDateTime lastModifyDate;
     private String profileURL;
-    private List<String> bio;
+    private String bio;
+    private boolean suspense;
     private List<Role> roleList;
 }

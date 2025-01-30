@@ -18,6 +18,7 @@ public class Like {
     private String userId;
     private String entityId;
     private EntityType entityType;
+    private boolean liked;
     @CreatedDate
     private LocalDateTime createdAt;
 }

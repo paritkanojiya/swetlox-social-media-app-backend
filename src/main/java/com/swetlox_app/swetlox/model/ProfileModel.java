@@ -16,7 +16,8 @@ public class ProfileModel {
     private Integer follower;
     private Integer following;
     private Integer postCount;
-    private List<String> bio;
+    private String bio;
     private boolean isAuthUserFollow;
     private boolean isSelfUser;
+    private boolean isPrivateProfile;
 }

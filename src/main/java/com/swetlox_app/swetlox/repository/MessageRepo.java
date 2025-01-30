@@ -9,5 +9,9 @@ import java.util.List;
 @Repository
 public interface MessageRepo extends MongoRepository<Message,String> {
     List<Message> findByChatRoomId(String chatId);
+
+    void deleteBySender(String id);
+
+    void deleteByRecipient(String id);
 }
 

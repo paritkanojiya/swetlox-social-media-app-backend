@@ -17,5 +17,9 @@ public interface CommentRepo extends MongoRepository<Comment,String> {
     void deleteByEntityId(String postId);
 
     Page<Comment> findByEntityId(String entityId, PageRequest pageRequest);
+
+    void deleteByUserId(String id);
+
+    Integer countByUserId(String userId);
 }
 

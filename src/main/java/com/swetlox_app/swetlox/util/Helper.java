@@ -18,6 +18,7 @@ public class Helper {
 
     @EventListener
     public void sendNotification(SendNotificationEvent sendNotificationEvent){
+        System.out.println("send "+sendNotificationEvent);
         NotificationType notificationType = sendNotificationEvent.getNotificationDto().getNotificationType();
         switch (notificationType){
             case REEL,POST,STORY -> simpMessagingTemplate.convertAndSend("/topic/notifications/"+sendNotificationEvent.getNotificationDto().getReceiverEmail(),sendNotificationEvent.getNotificationDto());

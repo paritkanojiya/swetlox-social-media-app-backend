@@ -4,9 +4,13 @@ import com.mongodb.client.result.UpdateResult;
 import com.swetlox_app.swetlox.allenum.EntityType;
 import com.swetlox_app.swetlox.allenum.MediaType;
 import com.swetlox_app.swetlox.allenum.NotificationType;
+import com.swetlox_app.swetlox.dto.comment.CommentRequestDto;
+import com.swetlox_app.swetlox.dto.comment.CommentResponseDto;
+import com.swetlox_app.swetlox.dto.like.LikeResponseDto;
 import com.swetlox_app.swetlox.dto.notification.InteractionNotificationDto;
 import com.swetlox_app.swetlox.dto.notification.NotificationDto;
 import com.swetlox_app.swetlox.dto.user.UserDto;
+import com.swetlox_app.swetlox.dto.usercollection.UserCollectionDto;
 import com.swetlox_app.swetlox.entity.*;
 import com.swetlox_app.swetlox.dto.post.PostResponseDto;
 import com.swetlox_app.swetlox.repository.PostRepo;
@@ -40,6 +44,9 @@ public class PostService {
     private final NotificationService notificationService;
     private final CommentService commentService;
     private final UserConnectionService userConnectionService;
+    private final UserPreferenceService userPreferenceService;
+    private final LikeService likeService;
+    
     @Value("${default.capacity.page.size}")
     private int DEFAULT_CAPACITY_FOR_PAGE_SIZE;
     
@@ -62,18 +69,19 @@ public class PostService {
         if(post.isPresent()){
             Post postGET = post.get();
             postRepo.delete(postGET);
-            commentService.deletePostComment(postGET.getId());
+            userCollectionRepo.findByEntityIdAndBookMark(postGET.getId(),true).orElse(new ArrayList<>()).stream().forEach(userCollections -> {userCollections.setBookMark(false); userCollectionRepo.save(userCollections);});
         }
-
     }
 
-    public void removePostFromUserCollection(String userId, String postId) {
-        Query query = new Query();
-        query.addCriteria(Criteria.where("userId").is(userId).and("postList").is(postId));
-        Update update = new Update();
-        update.pull("postList", postId);
-        UpdateResult updateResult = mongoTemplate.updateFirst(query, update, UserCollection.class);
-        System.out.println(updateResult);
+    public void removePostFromUserCollection(String userId, String userCollectionId) {
+        Optional<UserCollection> optionalUserCollection = userCollectionRepo.findById(userCollectionId);
+        if(optionalUserCollection.isPresent()){
+            UserCollection userCollection = optionalUserCollection.get();
+            userCollection.setBookMark(false);
+            updateUserCollection(userCollection);
+            return;
+        }
+        throw new RuntimeException("userCollection not found id is "+userCollectionId);
     }
 
 
@@ -83,42 +91,76 @@ public class PostService {
 
     public void likePost(String postId,String authId){
         Post post = postRepo.findById(postId).orElseThrow(() -> new RuntimeException("post not found"));
-        boolean isLiked=postRepo.existsByIdAndLikedUserListContaining(postId,authId);
-        if(isLiked){
-            removeUserIdFromLikedUserList(postId,authId);
-            return;
-        }
-        addUserIdFromLikedUserList(postId,authId);
         UserDto userDto = userService.getUserDtoById(authId);
         User user = userService.getUserById(post.getUserId());
-        NotificationDto notificationDto=new InteractionNotificationDto(postId,userDto,user.getEmail(),"like on your post", NotificationType.POST,post.getPostURL());
-        notificationService.sendNotification(notificationDto);
+        Optional<Like> optionalLike = likeService.isExist(postId, authId);
+        if(optionalLike.isPresent()){
+            Like like = optionalLike.get();
+            if(like.isLiked()){
+                like.setLiked(false);
+                likeService.update(like);
+            }else{
+                like.setLiked(true);
+                likeService.update(like);
+                boolean isNotificationOn = userPreferenceService.isOnLikeCommentNotification(post.getUserId());
+                if(isNotificationOn) {
+                    NotificationDto notificationDto = new InteractionNotificationDto(UUID.randomUUID().toString(), userDto, user.getEmail(), "like on your post", NotificationType.POST, post.getPostURL());
+                    notificationService.sendNotification(notificationDto);
+                }
+            }
+            return;
+        }
+        Like like = Like.builder()
+                .liked(true)
+                .userId(authId)
+                .entityId(postId)
+                .entityType(EntityType.POST)
+                .build();
+        likeService.save(like);
+        boolean isNotificationOn = userPreferenceService.isOnLikeCommentNotification(post.getUserId());
+        if(isNotificationOn) {
+            NotificationDto notificationDto = new InteractionNotificationDto(UUID.randomUUID().toString(), userDto, user.getEmail(), "like on your post", NotificationType.POST, post.getPostURL());
+            notificationService.sendNotification(notificationDto);
+        }
     }
 
-    public Page<PostResponseDto> loadPost(Integer pageNum, String token){
+    public Page<PostResponseDto> loadPost(Integer pageNum, String token) {
+        // Get the authenticated user
         User authUser = userService.getAuthUser(token);
-        Pageable pageRequest=PageRequest.of(pageNum,DEFAULT_CAPACITY_FOR_PAGE_SIZE,Sort.Direction.DESC,"createdAt");
+
+        // Define pagination and sorting
+        Pageable pageRequest = PageRequest.of(pageNum, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.Direction.DESC, "createdAt");
+
+        // Step 1: Get the list of followed user IDs
         Query connectionQuery = new Query(Criteria.where("followerId").is(authUser.getId()));
-        List<String> followedUserIds = mongoTemplate.find(connectionQuery, UserConnection.class)
+        List<String> followedUserIds = new ArrayList<>(mongoTemplate.find(connectionQuery, UserConnection.class)
                 .stream()
                 .map(UserConnection::getUserId)
-                .toList();
+                .toList());
 
-        // Step 2: Build criteria for public or follower-visible posts
+        // Add the authenticated user's ID to the list of followed users
+        followedUserIds.add(authUser.getId());
+
+        // Step 2: Build criteria for public posts or posts by followed users (including self)
         Criteria publicPosts = Criteria.where("privatePost").is(false);
         Criteria privatePosts = Criteria.where("userId").in(followedUserIds);
 
+        // Combine criteria
         Query postQuery = new Query(new Criteria().orOperator(publicPosts, privatePosts))
                 .with(pageRequest);
 
         // Step 3: Fetch posts
         List<Post> posts = mongoTemplate.find(postQuery, Post.class);
-        List<PostResponseDto> postResponseDtoList = posts.stream().map(post -> this.entityToPostResponseDto(post, authUser)).toList();
+        List<PostResponseDto> postResponseDtoList = posts.stream()
+                .map(post -> this.entityToPostResponseDto(post, authUser))
+                .toList();
+
         // Step 4: Count total posts matching the query
         long total = mongoTemplate.count(postQuery.skip(-1).limit(-1), Post.class);
 
         return new PageImpl<>(postResponseDtoList, pageRequest, total);
     }
+
 
     public Page<PostResponseDto> loadUserPost(String userId, String authToken, Integer pageNum){
         System.out.println("page number  for load user post "+pageNum);
@@ -134,17 +176,6 @@ public class PostService {
         return postRepo.findById(postId).orElseThrow(()->new RuntimeException("provided "+postId+" post not found"));
     }
 
-    private void removeUserIdFromLikedUserList(String postId, String userId) {
-        Query query = new Query(Criteria.where("_id").is(postId));
-        Update update = new Update().pull("likedUserList", userId);
-        mongoTemplate.updateFirst(query, update, Post.class);
-    }
-
-    private void addUserIdFromLikedUserList(String postId, String userId) {
-        Query query = new Query(Criteria.where("_id").is(postId));
-        Update update = new Update().addToSet("likedUserList", userId);
-        mongoTemplate.updateFirst(query, update, Post.class);
-    }
     private PostResponseDto entityToPostResponseDto(Post post,User authUser){
         UserDto userDto = userService.getUserDtoById(post.getUserId());
         return PostResponseDto.builder()
@@ -153,56 +184,106 @@ public class PostService {
                 .postURL(post.getPostURL())
                 .caption(post.getCaption())
                 .createdAt(post.getCreatedAt())
-                .likeCount(post.getLikedUserList() != null ? post.getLikedUserList().size() : 0)
-                .isLike(postRepo.existsByIdAndLikedUserListContaining(post.getId(), authUser.getId()))
-                .isBookMark(userCollectionRepo.existsByUserIdAndPostListContains(authUser.getId(), post.getId()))
+                .likeCount((int) likeService.countLikeEntityByEntityIdAndEntityType(post.getId(),EntityType.POST))
+                .isLike(likeService.isLike(post.getId(),authUser.getId()))
+                .isBookMark(isBookMarked(post.getId(),authUser.getId()))
                 .build();
     }
 
     public void bookMarkPost(String postId,User authUser){
-      UserCollection  userCollection=userCollectionRepo.findByUserId(authUser.getId()).orElse(new UserCollection());
-      boolean contains = userCollection.getPostList().contains(postId);
-      if(userCollection.getUserId()==null)
-          userCollection.setUserId(authUser.getId());
-      if(contains)
-          userCollection.getPostList().remove(postId);
-      else
-          userCollection.getPostList().add(postId);
-      userCollectionRepo.save(userCollection);
-    }
-
-    public UserCollection newUserCollections(String authId){
-        UserCollection userCollection=new UserCollection();
-        userCollection.setUserId(authId);
-        return userCollection;
-    }
-
-    public List<Comment> getPostComment(String postId){
-       return commentService.getPostComment(postId);
-    }
-    
-    public List<PostResponseDto> getBookMarkPost(String authToken){
-        User authUser = userService.getAuthUser(authToken);
-        Optional<UserCollection> optionalUserCollection = userCollectionRepo.findByUserId(authUser.getId());
+        Optional<UserCollection> optionalUserCollection = userCollectionRepo.findByEntityIdAndUserId(postId, authUser.getId());
         if(optionalUserCollection.isPresent()){
             UserCollection userCollection = optionalUserCollection.get();
-           return userCollection.getPostList().stream().map(this::getPostById).map(post -> entityToPostResponseDto(post,authUser)).collect(Collectors.toList());
+            userCollection.setBookMark(!userCollection.isBookMark());
+            updateUserCollection(userCollection);
+            return;
+        }
+        UserCollection userCollection = UserCollection.builder()
+                .bookMark(true)
+                .userId(authUser.getId())
+                .entityId(postId)
+                .entityType(EntityType.POST)
+                .build();
+        saveUserCollection(userCollection);
+    }
+
+    public void updateUserCollection(UserCollection userCollection){
+        userCollectionRepo.save(userCollection);
+    }
+
+    public void saveUserCollection(UserCollection userCollection){
+        userCollectionRepo.save(userCollection);
+    }
+
+
+    public Page<CommentResponseDto> getPostComment(String postId,Integer pageNum){
+       return commentService.getCommentByEntityId(postId,pageNum);
+    }
+
+    public List<CommentResponseDto> getPostCommentList(String postId){
+        return commentService.getCommentListByEntityId(postId);
+    }
+    public List<UserCollectionDto> getBookMarkPost(String authToken){
+        User authUser = userService.getAuthUser(authToken);
+        List<UserCollection> userCollections = userCollectionRepo.findByUserIdAndBookMarkAndEntityType(authUser.getId(),true,EntityType.POST).orElse(new ArrayList<>());
+        if(!userCollections.isEmpty()){
+            return userCollections.stream().map(this::userCollectionDto).toList();
         }
         return Collections.emptyList();
     }
 
+    public void comment(CommentRequestDto commentRequestDto, String token){
+        User authUser = userService.getAuthUser(token);
+        String entityId = commentRequestDto.getEntityId();
+        Post post = getPostById(entityId);
+        User user = userService.getUserById(post.getUserId());
+        commentService.saveComment(commentRequestDto,authUser,user);
+    }
     public Integer getUserPostCount(String authId){
         List<Post> postList = postRepo.findByUserId(authId);
         return  postList.size();
     }
 
     public void deleteAllPostByUserId(String id){
+        List<Post> postList = postRepo.findByUserId(id);
+        postList.stream().parallel().filter(post -> userCollectionRepo.existsByEntityId(post.getId())).forEach(post -> {
+            UserCollection userCollection=userCollectionRepo.findByEntityId(post.getId());
+            userCollection.setBookMark(false);
+            userCollectionRepo.save(userCollection);
+        });
+        postList.forEach(post -> likeService.deleteByEntityId(post.getId()));
+        postList.forEach(post -> commentService.deletePostComment(post.getId()));
         postRepo.deleteByUserId(id);
+    }
+
+    public boolean isBookMarked(String entityId,String userId){
+        return userCollectionRepo.findByEntityIdAndUserIdAndBookMark(entityId,userId,true).isPresent();
+    }
+
+    public UserCollectionDto userCollectionDto(UserCollection userCollection){
+        String entityId = userCollection.getEntityId();
+        Post post = getPostById(entityId);
+        return UserCollectionDto.builder().id(userCollection.getId())
+                .id(userCollection.getId())
+                .entityId(userCollection.getEntityId())
+                .savedAt(userCollection.getCreatedAt())
+                .caption(userCollection.getEntityCaption())
+                .entityType(EntityType.POST)
+                .entityURL(post.getPostURL())
+                .build();
     }
 
     public PostResponseDto getPostResponseDtoByPostId(String postId,String authToken) {
         User authUser = userService.getAuthUser(authToken);
         Post post = getPostById(postId);
         return entityToPostResponseDto(post,authUser);
+    }
+
+    public long getTotalPostCount() {
+        return postRepo.count();
+    }
+
+    public List<LikeResponseDto> getLikeUserList(String postId,String token){
+        return likeService.getLikeListByEntityId(postId);
     }
 }

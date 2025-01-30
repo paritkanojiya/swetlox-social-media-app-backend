@@ -7,10 +7,7 @@ import com.swetlox_app.swetlox.dto.comment.CommentResponseDto;
 import com.swetlox_app.swetlox.dto.notification.InteractionNotificationDto;
 import com.swetlox_app.swetlox.dto.notification.NotificationDto;
 import com.swetlox_app.swetlox.dto.user.UserDto;
-import com.swetlox_app.swetlox.entity.Comment;
-import com.swetlox_app.swetlox.entity.Post;
-import com.swetlox_app.swetlox.entity.Story;
-import com.swetlox_app.swetlox.entity.User;
+import com.swetlox_app.swetlox.entity.*;
 import com.swetlox_app.swetlox.event.SendNotificationEvent;
 import com.swetlox_app.swetlox.repository.CommentRepo;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +23,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -34,22 +32,28 @@ public class CommentService {
 
 
     private final CommentRepo commentRepo;
+
     private final StoryService storyService;
     private final NotificationService notificationService;
+    private final UserPreferenceService userPreferenceService;
     @Autowired
     @Lazy
     private  PostService postService;
+    @Autowired
+    @Lazy
+    private ReelsService reelsService;
     @Autowired
     @Lazy
     private  UserService userService;
     @Value("${default.capacity.page.size}")
     private int DEFAULT_CAPACITY_FOR_PAGE_SIZE;
     public static final String COMMENT_ON_POST = "comment on your post";
+    private static final String COMMENT_ON_REEL="comment on your reel";
     public static final String COMMENT_ON_STORY = "comment on your story";
 
 
 
-    public void saveComment(CommentRequestDto commentRequestDto, User authUser){
+    public void saveComment(CommentRequestDto commentRequestDto, User authUser,User entityUser){
         Comment comment = Comment.builder()
                 .entityId(commentRequestDto.getEntityId())
                 .entityType(commentRequestDto.getEntityType())
@@ -57,7 +61,10 @@ public class CommentService {
                 .userId(authUser.getId())
                 .build();
         Comment saveComment= commentRepo.save(comment);
-        sendNotification(saveComment,authUser);
+        boolean isLikeCommentNotficatioOn = userPreferenceService.isOnLikeCommentNotification(entityUser.getId());
+        if(isLikeCommentNotficatioOn){
+            sendNotification(saveComment,authUser);
+        }
     }
 
     public void deletePostComment(String postId){
@@ -72,9 +79,14 @@ public class CommentService {
         PageRequest pageRequest = PageRequest.of(pageNum, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.Direction.DESC, "createdAt");
         Page<Comment> commentPage = commentRepo.findByEntityId(entityId, pageRequest);
         List<CommentResponseDto> commentResponseDtoList = commentPage.map(this::entityToCommentResponseDto).toList();
-        return new PageImpl<>(commentResponseDtoList,pageRequest,commentPage.getTotalPages());
+        return new PageImpl<>(commentResponseDtoList,pageRequest,commentPage.getTotalElements());
     }
-    
+
+    public List<CommentResponseDto> getCommentListByEntityId(String entityId){
+        List<Comment> commentList = commentRepo.findByEntityId(entityId);
+        return commentList.stream().map(this::entityToCommentResponseDto).toList();
+    }
+
     public List<Comment> getPostComment(String postId){
         return commentRepo.findByEntityId(postId);
     }
@@ -101,18 +113,29 @@ public class CommentService {
                 String postId = comment.getEntityId();
                 Post post = postService.getPostById(postId);
                 User postUser = userService.getUserById(post.getUserId());
-                notificationService.sendNotification(new InteractionNotificationDto(postId,userDto,postUser.getEmail(),COMMENT_ON_POST,NotificationType.POST,post.getPostURL()));
+                notificationService.sendNotification(new InteractionNotificationDto(UUID.randomUUID().toString(),userDto,postUser.getEmail(),COMMENT_ON_POST,NotificationType.POST,post.getPostURL()));
             }
             case REEL -> {
-                //pending
+                String reelId = comment.getEntityId();
+                Reels reel = reelsService.getReelById(reelId);
+                User reelUser = userService.getUserById(reel.getUserId());
+                notificationService.sendNotification(new InteractionNotificationDto(UUID.randomUUID().toString(),userDto,reelUser.getEmail(),COMMENT_ON_REEL,NotificationType.POST,"not support"));
             }
             case STORY -> {
                 String storyId = comment.getEntityId();
                 Story story = storyService.getStoryById(storyId);
                 User storyUser = userService.getUserById(story.getUserId());
-                notificationService.sendNotification(new InteractionNotificationDto(storyId,userDto,storyUser.getEmail(),COMMENT_ON_STORY,NotificationType.STORY,"not support"));
+                notificationService.sendNotification(new InteractionNotificationDto(UUID.randomUUID().toString(),userDto,storyUser.getEmail(),COMMENT_ON_STORY,NotificationType.STORY,"not support"));
             }
             default -> throw new RuntimeException("not support");
         }
+    }
+
+    public Integer getCommentCountByUserId(String userId){
+        return commentRepo.countByUserId(userId);
+    }
+
+    public void deleteAllCommentByUserId(String id) {
+        commentRepo.deleteByUserId(id);
     }
 }

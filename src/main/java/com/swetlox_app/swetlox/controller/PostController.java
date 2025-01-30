@@ -1,6 +1,9 @@
 package com.swetlox_app.swetlox.controller;
 
 import com.swetlox_app.swetlox.dto.comment.CommentRequestDto;
+import com.swetlox_app.swetlox.dto.comment.CommentResponseDto;
+import com.swetlox_app.swetlox.dto.like.LikeResponseDto;
+import com.swetlox_app.swetlox.dto.usercollection.UserCollectionDto;
 import com.swetlox_app.swetlox.entity.Comment;
 import com.swetlox_app.swetlox.entity.User;
 import com.swetlox_app.swetlox.dto.post.PostResponseDto;
@@ -75,8 +78,7 @@ public class PostController {
 
     @PostMapping("/comment")
     public ResponseEntity<Void> comment(@RequestBody CommentRequestDto commentRequestDto, @RequestHeader("Authorization") String token){
-        User authUser = userService.getAuthUser(token);
-        commentService.saveComment(commentRequestDto, authUser);
+        postService.comment(commentRequestDto,token);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .build();
     }
@@ -89,10 +91,11 @@ public class PostController {
     }
 
     @GetMapping("/comment/{postId}")
-    public ResponseEntity<List<Comment>> getPostComment(@PathVariable("postId") String postId){
-        List<Comment> postComment = postService.getPostComment(postId);
-        return ResponseEntity.ok(postComment);
+    public ResponseEntity<List<CommentResponseDto>> getPostComment(@PathVariable("postId") String postId){
+        List<CommentResponseDto> postCommentList = postService.getPostCommentList(postId);
+        return ResponseEntity.ok(postCommentList);
     }
+    
 
     @GetMapping("/bookmark-post/{postId}")
     public void savePost(@PathVariable("postId") String postId,@RequestHeader("Authorization") String token){
@@ -100,8 +103,8 @@ public class PostController {
     }
 
     @GetMapping("/bookmark-post")
-    public ResponseEntity<List<PostResponseDto>> bookmarkPost(@RequestHeader("Authorization") String token){
-        List<PostResponseDto> bookMarkPost = postService.getBookMarkPost(token);
+    public ResponseEntity<List<UserCollectionDto>> bookmarkPost(@RequestHeader("Authorization") String token){
+        List<UserCollectionDto> bookMarkPost = postService.getBookMarkPost(token);
         return ResponseEntity.ok(bookMarkPost);
     }
 
@@ -109,5 +112,11 @@ public class PostController {
     public void bookmarkPostDelete(@PathVariable("postId") String postId,@RequestHeader("Authorization") String token){
         User authUser = userService.getAuthUser(token);
         postService.removePostFromUserCollection(authUser.getId(),postId);
+    }
+
+    @GetMapping("/like-user-list/{postId}")
+    public ResponseEntity<List<LikeResponseDto>> getLikeUserList(@PathVariable("postId") String postId, @RequestHeader("Authorization") String token){
+        List<LikeResponseDto> likeUserList = postService.getLikeUserList(postId, token);
+        return ResponseEntity.ok(likeUserList);
     }
 }

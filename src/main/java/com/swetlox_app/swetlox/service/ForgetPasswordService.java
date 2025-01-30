@@ -31,7 +31,7 @@ public class ForgetPasswordService {
         if(!authUser.getUserType().equals(UserType.EMAIL)) throw new RuntimeException("provided email id register with social login try login with social login");
         ForgetPassword forgetPassword = forgetPasswordRepo.findByUserId(authUser.getId()).orElseGet(() -> createForgetPassword(authUser));
         forgetPassword.setToken(generateToken());
-        forgetPassword.setExpiryTime(LocalDateTime.now().plusMinutes(30));
+        forgetPassword.setExpiryTime(LocalDateTime.now().plusMinutes(15));
         ForgetPassword savedForgetPassword = forgetPasswordRepo.save(forgetPassword);
         String resetLink= forgotPasswordURL+"?token="+savedForgetPassword.getToken();
         mailService.sendResetLink(authUser.getEmail(),resetLink);

@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Component(value = "GoogleAuthentication")
 @Scope("prototype")
@@ -42,21 +43,24 @@ public class GoogleAuthentication implements OAuthAuthenticationStatrgey{
 
     @Override
     public User authenticate(String code) throws UserAlreadyExistEx, MessagingException {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-        params.add("client_id", CLIENT_ID);
-        params.add("client_secret", CLIENT_SECRET);
-        params.add("code", code);
-        params.add("grant_type", "authorization_code");
-        params.add("redirect_uri", "http://localhost:9000/swetlox/v1/auth/login/google");
-        HttpHeaders headers=new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
-        ResponseEntity<Map> response = restTemplate.exchange(TOKEN_URI, HttpMethod.POST, request, Map.class);
-        System.out.println(response);
-        return fetchUserData(response.getBody().get("access_token").toString());
+
+
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+            params.add("client_id", CLIENT_ID);
+            params.add("client_secret", CLIENT_SECRET);
+            params.add("code", code);
+            params.add("grant_type", "authorization_code");
+            params.add("redirect_uri", "http://localhost:9000/swetlox/v1/auth/login/google");
+            HttpHeaders headers=new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
+            ResponseEntity<Map> response = restTemplate.exchange(TOKEN_URI, HttpMethod.POST, request, Map.class);
+            System.out.println(response);
+            return fetchUserData(Objects.requireNonNull(response.getBody()).get("access_token").toString());
     }
 
     private User fetchUserData(String token) throws UserAlreadyExistEx, MessagingException {
+        System.out.println(token);
         HttpHeaders headers=new HttpHeaders();
         headers.setBearerAuth(token);
         HttpEntity<Object> request = new HttpEntity<>(headers);

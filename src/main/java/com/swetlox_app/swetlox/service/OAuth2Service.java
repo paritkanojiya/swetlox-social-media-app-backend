@@ -17,14 +17,18 @@ public class OAuth2Service {
 
     private final UserService userService;
     private final Environment environment;
+    private final UserPreferenceService userPreferenceService;
 
     public User saveOAut2User(UserDetailsDto user) {
         if(user.getEmail()==null) throw new RuntimeException("User email can not be null");
         boolean userExist = userService.isUserExistByEmail(user.getEmail());
+        boolean isUserNameExist=userService.isUserNameExist(user.getUserName());
         if(!userExist) {
+            if(isUserNameExist) throw new RuntimeException("userName already exist");
             return userService.saveOAuth2User(user);
         }
         User auth2User = userService.getUser(user.getEmail());
+        if(auth2User.isSuspense()) throw new RuntimeException("you are blacklist user");
         if(auth2User.getUserType().equals(UserType.EMAIL)) throw new RuntimeException("provided email already register");
         if(!auth2User.getUserType().equals(user.getUserType()))  auth2User.setUserType(user.getUserType());
         userService.updateUser(auth2User);

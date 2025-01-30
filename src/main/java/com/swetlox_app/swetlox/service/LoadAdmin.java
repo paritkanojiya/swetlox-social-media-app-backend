@@ -3,6 +3,7 @@ package com.swetlox_app.swetlox.service;
 import com.swetlox_app.swetlox.allenum.UserType;
 import com.swetlox_app.swetlox.entity.Role;
 import com.swetlox_app.swetlox.entity.User;
+import com.swetlox_app.swetlox.entity.UserPreference;
 import com.swetlox_app.swetlox.repository.UserRepo;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ public class LoadAdmin {
     private final PasswordEncoder passwordEncoder;
     private final UserRepo userRepository;
     private final MongoTemplate mongoTemplate;
-
+    private final UserPreferenceService userPreference;
     @PostConstruct
     public void init(){
         System.out.println(mongoTemplate.getDb().getName());
@@ -30,7 +31,7 @@ public class LoadAdmin {
 //    @PostConstruct
 //    public void loadAdmin(){
 //        Role role=new Role();
-//        role.setRole("ADMIN");
+//        role.setRole("ROLE_ADMIN");
 //        User adminUser = User.builder()
 //                .userName("admin")
 //                .email("admin@gmail.com")
@@ -39,7 +40,9 @@ public class LoadAdmin {
 //                .createdAt(LocalDateTime.now())
 //                .roleList(List.of(role))
 //                .userType(UserType.EMAIL)
+//                .suspense(false)
 //                .build();
-//        userRepository.save(adminUser);
+//        User saved = userRepository.save(adminUser);
+//        userPreference.initialSetting(saved.getId());
 //    }
 }

@@ -33,8 +33,12 @@ public class UserPasswordAuthentication implements AuthenticationProvider {
         UserDetailsImpl userDetails = (UserDetailsImpl) userDetailsService.loadUserByUsername(authentication.getName());
         log.info("password {}",userDetails.getPassword());
         log.info("authpassword {}",authentication.getCredentials());
+
         if(userDetails.isAuth2User()){
             throw new RuntimeException("OAuth2 user try with social login provider");
+        }
+        if(userDetails.isSuspense()){
+            throw new RuntimeException(("you are blacklist user"));
         }
         if(!userDetails.isVerified()){
             throw new RuntimeException("Not verify user");

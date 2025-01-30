@@ -17,7 +17,7 @@ public class Reels {
     private String id;
     private String userId;
     private String caption;
-    private List<String> likedUserList;
     private LocalDateTime createdAt;
     private String reelsURL;
+    private boolean privateReel;
 }

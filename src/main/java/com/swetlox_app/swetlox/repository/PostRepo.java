@@ -15,7 +15,7 @@ import java.util.Optional;
 public interface PostRepo extends MongoRepository<Post,String> {
     List<Post> findByUserId(String id);
 
-    boolean existsByIdAndLikedUserListContaining(String postId, String userId);
+
 
     Optional<Post> findByIdAndUserId(String postId,String authId);
 

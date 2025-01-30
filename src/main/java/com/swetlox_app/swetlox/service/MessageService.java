@@ -152,4 +152,8 @@ public class MessageService {
     }
 
 
+    public void deleteAllMessageByUserId(String id) {
+        messageRepo.deleteBySender(id);
+        messageRepo.deleteByRecipient(id);
+    }
 }

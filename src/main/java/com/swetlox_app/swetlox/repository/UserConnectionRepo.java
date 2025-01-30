@@ -11,13 +11,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UserConnectionRepo extends MongoRepository<UserConnection,String> {
 
     @Query(value = "{ 'userId': ?0, 'followerId': ?1 }", exists = true)
     boolean existsByIdAndFollowerContains(String authId, String userId);
-    @Query(value = "{ 'UserId': ?0, 'followerId': ?1 }", exists = true)
+    @Query(value = "{ 'UserId': ?1, 'followerId': ?0 }", exists = true)
     boolean existsByIdAndFollowingContains(String authId, String userId);
     List<UserConnection> findByUserId(String id);
     Page<UserConnection> findByUserId(String id, PageRequest pageRequest);
@@ -28,4 +29,5 @@ public interface UserConnectionRepo extends MongoRepository<UserConnection,Strin
 
     void deleteByFollowerId(String id);
 
+    Optional<UserConnection> findByUserIdAndFollowerId(String userId, String id);
 }

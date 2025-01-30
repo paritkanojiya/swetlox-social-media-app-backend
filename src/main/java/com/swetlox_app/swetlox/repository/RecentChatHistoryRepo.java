@@ -15,4 +15,8 @@ public interface RecentChatHistoryRepo extends MongoRepository<RecentChatHistory
     List<RecentChatHistory> findByAuthUserId(String authUserId, Sort lastInteraction);
 
     Optional<RecentChatHistory> findByUserIdAndAuthUserId(String requestedUser, String authUser);
+
+    void deleteByUserId(String id);
+
+    void deleteByAuthUserId(String id);
 }

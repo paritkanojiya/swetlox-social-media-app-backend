@@ -16,6 +16,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Component(value = "GitHubAuthentication")
 @Scope("prototype")
@@ -40,14 +41,16 @@ public class GitHubAuthentication implements OAuthAuthenticationStatrgey{
 
     @Override
     public User authenticate(String code) throws UserAlreadyExistEx, MessagingException {
-        log.info("{} {} {}",CLIENT_ID,CLIENT_SECRET,code);
-        Map<String, String> params = Map.of("client_id", CLIENT_ID, "client_secret", CLIENT_SECRET, "code", code);
-        HttpHeaders headers=new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        HttpEntity<Map<String, String>> request = new HttpEntity<>(params, headers);
-        ResponseEntity<Map> response = restTemplate.exchange(TOKEN_URI, HttpMethod.POST, request, Map.class);
-        System.out.println(response);
-        return fetchUserData(response.getBody().get("access_token").toString());
+
+            log.info("{} {} {}",CLIENT_ID,CLIENT_SECRET,code);
+            Map<String, String> params = Map.of("client_id", CLIENT_ID, "client_secret", CLIENT_SECRET, "code", code);
+            HttpHeaders headers=new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, String>> request = new HttpEntity<>(params, headers);
+            ResponseEntity<Map> response = restTemplate.exchange(TOKEN_URI, HttpMethod.POST, request, Map.class);
+            System.out.println(response);
+            return fetchUserData(Objects.requireNonNull(response.getBody()).get("access_token").toString());
+
     }
 
     private User fetchUserData(String token) throws UserAlreadyExistEx, MessagingException {

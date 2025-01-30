@@ -1,6 +1,7 @@
 package com.swetlox_app.swetlox.filter;
 
 import com.swetlox_app.swetlox.service.JwtService;
+import com.swetlox_app.swetlox.service.UserDetailsImpl;
 import com.swetlox_app.swetlox.service.UserDetailsServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -36,11 +37,14 @@ public class JwtFilter extends OncePerRequestFilter {
             try{
                 jwtService.validateToken(token);
                 String userName=jwtService.extractUserNameFromToken(token);
-                UserDetails userDetails = userDetailsService.loadUserByUsername(userName);
+                UserDetailsImpl userDetails = (UserDetailsImpl) userDetailsService.loadUserByUsername(userName);
+                if(userDetails.isSuspense()){
+                    throw new RuntimeException("your account is has been freeze");
+                }
                 UsernamePasswordAuthenticationToken authenticated=UsernamePasswordAuthenticationToken.authenticated(userDetails.getUsername(),null,userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(authenticated);
             }catch (Exception ex){
-                log.error("Exception occur");
+                log.error("exception {}",ex.getMessage());
             }
         }
         filterChain.doFilter(request,response);

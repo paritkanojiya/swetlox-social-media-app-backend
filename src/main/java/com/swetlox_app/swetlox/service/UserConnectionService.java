@@ -36,6 +36,7 @@ public class UserConnectionService {
     private final ConnectionRequestRepo connectionRequestRepo;
     private final ApplicationEventPublisher eventPublisher;
     private final ChatRoomService chatRoomService;
+    private final UserPreferenceService userPreferenceService;
     @Autowired
     private  UserService userService;
     @Value("${default.capacity.page.size}")
@@ -44,11 +45,38 @@ public class UserConnectionService {
 
     public void followRequest(String requestedUserId, User authUser){
         User user = userService.getUserById(requestedUserId);
+        Optional<ConnectionRequest> optionalConnectionRequest = connectionRequestRepo.findBySenderIdAndReceiverId(authUser.getId(), user.getId());
+        boolean isAutoFollowOn = userPreferenceService.isAutoFollowOn(requestedUserId);
+        boolean isNewFollowerNotificationOn = userPreferenceService.isNewFollowerNotificationOn(requestedUserId);
+        if(optionalConnectionRequest.isPresent()){
+            ConnectionRequest connectionRequest = optionalConnectionRequest.get();
+            connectionRequest.setStatus(ConnectionRequestStatus.PENDING);
+            connectionRequestRepo.save(connectionRequest);
+            if(isAutoFollowOn){
+                acceptRequest(user,authUser.getId());
+                return;
+            }
+            if(isNewFollowerNotificationOn) {
+                UserDto userDto = userService.getUserDtoByUser(authUser);
+                NotificationDto notificationDto = new ConnectionRequestNotificationDto(connectionRequest.getId(), userDto, user.getEmail(), "sent you a connection request", NotificationType.CONNECTION_REQUEST);
+                eventPublisher.publishEvent(new SendNotificationEvent(this, notificationDto));
+                return;
+            }
+
+        }
         ConnectionRequest connectionRequest = saveConnectionRequest(requestedUserId, authUser.getId());
-        UserDto userDto = userService.getUserDtoByUser(authUser);
-        NotificationDto notificationDto = new ConnectionRequestNotificationDto(connectionRequest.getId(),userDto,user.getEmail(),"sent you a connection request", NotificationType.CONNECTION_REQUEST);
-        eventPublisher.publishEvent(new SendNotificationEvent(this,notificationDto));
+        if(isAutoFollowOn){
+            acceptRequest(user,authUser.getId());
+            return;
+        }
+        if(isNewFollowerNotificationOn) {
+            UserDto userDto = userService.getUserDtoByUser(authUser);
+            NotificationDto notificationDto = new ConnectionRequestNotificationDto(connectionRequest.getId(), userDto, user.getEmail(), "sent you a connection request", NotificationType.CONNECTION_REQUEST);
+            eventPublisher.publishEvent(new SendNotificationEvent(this, notificationDto));
+        }
     }
+
+    
 
     public List<ConnectionRequestNotificationDto> getAllPendingConnectionRequest(String authToken){
         User authUser = userService.getAuthUser(authToken);
@@ -63,6 +91,24 @@ public class UserConnectionService {
         return connectionRequestRepo.findBySenderIdAndReceiverId(authUserId,requestId).isPresent();
     }
 
+    public void unfollow(String userId,String token){
+        User authUser = userService.getAuthUser(token);
+        boolean existsByIdAndFollowerContains = userConnectionRepo.existsByIdAndFollowerContains(userId, authUser.getId());
+        if (existsByIdAndFollowerContains){
+            Optional<ConnectionRequest> optionalConnectionRequest = connectionRequestRepo.findBySenderIdAndReceiverId(userId, authUser.getId());
+            if(optionalConnectionRequest.isPresent()){
+                ConnectionRequest connectionRequest = optionalConnectionRequest.get();
+                connectionRequest.setStatus(ConnectionRequestStatus.REJECTED);
+                connectionRequestRepo.save(connectionRequest);
+            }
+            Optional<UserConnection> optionalUserConnection=userConnectionRepo.findByUserIdAndFollowerId(userId,authUser.getId());
+            if(optionalUserConnection.isPresent()){
+                UserConnection userConnection = optionalUserConnection.get();
+                userConnectionRepo.delete(userConnection);
+            }
+        }
+    }
+    
     public ConnectionRequestNotificationDto entityToPendingConnectionRequestDto(ConnectionRequest connectionRequest){
         User senderUser = userService.getUserById(connectionRequest.getSenderId());
         User recieverUser=userService.getUserById(connectionRequest.getReceiverId());
@@ -102,6 +148,8 @@ public class UserConnectionService {
     }
 
     private UserConnection createNewConnection(String authId,String requestedUserId) {
+        boolean existsByIdAndFollowerContains = userConnectionRepo.existsByIdAndFollowerContains(authId, requestedUserId);
+        if(existsByIdAndFollowerContains) throw new RuntimeException("user already following");
         return UserConnection.builder()
                 .userId(authId)
                 .followerId(requestedUserId)
@@ -143,6 +191,14 @@ public class UserConnectionService {
 //        return Collections.emptyList();
 //    }
 
+    public void rejectFriendRequest(String userId,String token){
+        User authUser = userService.getAuthUser(token);
+        User user = userService.getUserById(userId);
+        ConnectionRequest connectionRequest = getConnectionRequest(user.getId(), authUser.getId());
+        connectionRequest.setStatus(ConnectionRequestStatus.REJECTED);
+        update(connectionRequest);
+    }
+    
     public List<UserConnectionDTO> getUserChatHistory(String token){
         User authUser = userService.getAuthUser(token);
         List<RecentChatHistory> recentChatHistoryList = chatRoomService.getRecentChatHistory(authUser.getId());
@@ -170,6 +226,21 @@ public class UserConnectionService {
         return new ArrayList<>(userDtoList);
     }
 
+    public void removeFriendShip(String userId,String token){
+        User authUser = userService.getAuthUser(token);
+        Optional<UserConnection> optionalUserConnection = userConnectionRepo.findByUserIdAndFollowerId(authUser.getId(), userId);
+        if(optionalUserConnection.isPresent()){
+            UserConnection userConnection = optionalUserConnection.get();
+            Optional<ConnectionRequest> optionalConnectionRequest = connectionRequestRepo.findBySenderIdAndReceiverId(userId, authUser.getId());
+            if(optionalConnectionRequest.isPresent()){
+                ConnectionRequest connectionRequest = optionalConnectionRequest.get();
+                connectionRequest.setStatus(ConnectionRequestStatus.REJECTED);
+                connectionRequestRepo.save(connectionRequest);
+            }
+            userConnectionRepo.delete(userConnection);
+        }
+    }
+    
     public Page<UserConnectionDTO> getFollowing(String authToken,Integer pageNum){
         User authUser = userService.getAuthUser(authToken);
         PageRequest pageRequest = PageRequest.of(pageNum, DEFAULT_CAPACITY_FOR_PAGE_SIZE, Sort.Direction.DESC, "createdAt");
@@ -208,7 +279,6 @@ public class UserConnectionService {
 
     private UserConnectionDTO entityToUserConnectionDTO(String userId,User authUser){
         User user = userService.getUserById(userId);
-        System.out.println(user);
         boolean followerContains = existsByIdAndFollowerContains(user.getId(), authUser.getId());
         return UserConnectionDTO.builder()
                 .userId(user.getId())
