@@ -7,8 +7,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 465
-    username:
-    password:
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -25,32 +25,39 @@ spring:
       enabled: true
       max-file-size: 1GB
       max-request-size: 1GB
+
 server:
   port: 9000
   servlet:
     context-path: "/swetlox"
+
 jwt:
-  secret: "w7sF7KhZj9UQj5lZ+3O7JH8c4u/D8AeO4jW9F9K4HJk="
+  secret: ${JWT_SECRET}
   expiry-time: 100000000
   issuer: "swetlox"
+
 default:
   capacity:
     page:
       size: 6
+
 oAuth2:
   github:
-    clientId:
-    client-secret:
-    token-uri:
-    fetch-data-uri:
-    oauth2-login-uri:
+    clientId: ${GITHUB_CLIENT_ID}
+    client-secret: ${GITHUB_CLIENT_SECRET}
+    token-uri: https://github.com/login/oauth/access_token
+    fetch-data-uri: https://api.github.com/user
+    oauth2-login-uri: https://github.com/login/oauth/authorize
   google:
-    clientId:
-    client-secret:
-    token-uri:
-    fetch-data-uri:
-    oauth2-login-uri:
+    clientId: ${GOOGLE_CLIENT_ID}
+    client-secret: ${GOOGLE_CLIENT_SECRET}
+    token-uri: https://oauth2.googleapis.com/token
+    fetch-data-uri: https://www.googleapis.com/oauth2/v3/userinfo
+    oauth2-login-uri: https://accounts.google.com/o/oauth2/v2/auth
+
+cloudinary:
+  cloud_name: ${CLOUDINARY_CLOUD_NAME}
+  api_key: ${CLOUDINARY_CLOUD_API_KEY}
+  api_secret: ${CLOUDINARY_CLOUD_API_SECRET}
 swetlox:
   fronted-path: "http://localhost:3000"
-
-

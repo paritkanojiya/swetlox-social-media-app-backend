@@ -2,6 +2,7 @@ package com.swetlox_app.swetlox.config;
 
 import com.cloudinary.Cloudinary;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.task.SimpleAsyncTaskExecutorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,14 @@ import java.util.Map;
 @Configuration
 @EnableAsync
 public class GlobalConfig {
+
+
+    @Value("${cloudinary.cloud_name}")
+    private static String CLOUD_NAME;
+    @Value("${cloudinary.api_key}")
+    private static String CLOUD_API_KEY;
+    @Value("${cloudinary.api_secret}")
+    private static String CLOUD_API_SECRET;
 
     @Bean(name = "taskExecutor")
     public TaskExecutor taskExecutor(){
@@ -41,9 +50,9 @@ public class GlobalConfig {
     @Bean
     public Cloudinary cloudinaryTemplate(){
         Map<String,String> config=new HashMap<>();
-        config.put("cloud_name","");
-        config.put("api_key","");
-        config.put("api_secret","");
+        config.put("cloud_name",CLOUD_NAME);
+        config.put("api_key",CLOUD_API_KEY);
+        config.put("api_secret",CLOUD_API_SECRET);
         return new Cloudinary(config);
     }
 

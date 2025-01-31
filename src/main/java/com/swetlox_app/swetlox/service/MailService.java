@@ -9,6 +9,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,10 @@ public class MailService {
 
     private Session session;
     private final UserOtpRepository userOtpRepo;
+    @Value("${spring.mail.username}")
+    private static String email;
+    @Value("${spring.mail.password}")
+    private static String password;
 
     @PostConstruct
     public void init(){
@@ -35,7 +40,7 @@ public class MailService {
         Authenticator authenticator=new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication("email","password");
+                return new PasswordAuthentication(email,password);
             }
         };
         this.session=Session.getInstance(prop,authenticator);
