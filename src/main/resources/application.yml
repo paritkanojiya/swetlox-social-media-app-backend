@@ -41,15 +41,15 @@ oAuth2:
   github:
     clientId:
     client-secret:
-    token-uri: https://github.com/login/oauth/access_token
-    fetch-data-uri: https://api.github.com/user
-    oauth2-login-uri: https://github.com/login/oauth/authorize
+    token-uri:
+    fetch-data-uri:
+    oauth2-login-uri:
   google:
     clientId:
     client-secret:
-    token-uri: https://oauth2.googleapis.com/token
-    fetch-data-uri: https://www.googleapis.com/oauth2/v3/userinfo
-    oauth2-login-uri: https://accounts.google.com/o/oauth2/v2/auth
+    token-uri:
+    fetch-data-uri:
+    oauth2-login-uri:
 swetlox:
   fronted-path: "http://localhost:3000"
 
