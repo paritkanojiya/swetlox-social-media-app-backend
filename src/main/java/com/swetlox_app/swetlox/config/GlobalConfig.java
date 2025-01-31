@@ -18,6 +18,7 @@ import java.util.Map;
 @Configuration
 @EnableAsync
 public class GlobalConfig {
+
     @Bean(name = "taskExecutor")
     public TaskExecutor taskExecutor(){
         return new SimpleAsyncTaskExecutorBuilder().concurrencyLimit(10)
@@ -40,9 +41,9 @@ public class GlobalConfig {
     @Bean
     public Cloudinary cloudinaryTemplate(){
         Map<String,String> config=new HashMap<>();
-        config.put("cloud_name","dkbbhmnk6");
-        config.put("api_key","771215487231778");
-        config.put("api_secret","H0Gf79694cfwoIotNeMCk0T1RVU");
+        config.put("cloud_name","");
+        config.put("api_key","");
+        config.put("api_secret","");
         return new Cloudinary(config);
     }
 

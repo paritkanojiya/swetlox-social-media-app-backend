@@ -35,7 +35,7 @@ public class MailService {
         Authenticator authenticator=new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication("techsoftindia321@gmail.com","lgrd aion klni tqhm");
+                return new PasswordAuthentication("email","password");
             }
         };
         this.session=Session.getInstance(prop,authenticator);
@@ -51,7 +51,7 @@ public class MailService {
         String otp = generateOtp();
         mimeMessage.setRecipient(Message.RecipientType.TO,new InternetAddress(to));
         mimeMessage.setContent(getEmailBody(otp), "text/html");
-//        Transport.send(mimeMessage);
+        Transport.send(mimeMessage);
         log.info("otp : {}",otp);
         UserOtp userOtp = userOtpRepo.findByEmail(to);
         if(userOtp!=null) {

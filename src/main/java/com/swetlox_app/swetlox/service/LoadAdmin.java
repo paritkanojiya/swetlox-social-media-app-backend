@@ -35,7 +35,7 @@ public class LoadAdmin {
 //        User adminUser = User.builder()
 //                .userName("admin")
 //                .email("admin@gmail.com")
-//                .password(passwordEncoder.encode("parit2003"))
+//                .password(passwordEncoder.encode("---"))
 //                .isVerified(true)
 //                .createdAt(LocalDateTime.now())
 //                .roleList(List.of(role))
