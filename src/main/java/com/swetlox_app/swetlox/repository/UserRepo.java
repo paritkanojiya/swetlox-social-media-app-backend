@@ -17,7 +17,7 @@ public interface UserRepo extends MongoRepository<User,String> {
 
     List<User> findByIsVerifiedFalseAndCreatedAtBefore(LocalDateTime tenMinutesAgo);
 
-    @Query("{userName:{$regex:?0,$options:i},suspense:false}")
+    @Query("{userName:{$regex:?0,$options:i},suspend:false}")
     List<User> findByUserName(String q);
 
     boolean existsByEmail(String email);

@@ -2,20 +2,23 @@ package com.swetlox_app.swetlox.entity;
 
 
 import com.swetlox_app.swetlox.allenum.UserType;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
 @Document(collection = "users")
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class User {
     @Id
@@ -33,6 +36,6 @@ public class User {
     private LocalDateTime lastModifyDate;
     private String profileURL;
     private String bio;
-    private boolean suspense;
+    private boolean suspend;
     private List<Role> roleList;
 }

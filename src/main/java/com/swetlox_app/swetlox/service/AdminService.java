@@ -52,7 +52,7 @@ public class AdminService {
                 .totalFollower(followerCount)
                 .totalFollowing(followingCount)
                 .profileURL(user.getProfileURL())
-                .suspense(user.isSuspense())
+                .suspense(user.isSuspend())
                 .build();
     }
 
@@ -85,13 +85,13 @@ public class AdminService {
 
     public void suspenseAccount(String userId){
         User user = userService.getUserById(userId);
-        user.setSuspense(true);
+        user.setSuspend(true);
         userService.updateUser(user);
     }
 
     public void unsuspenseAccount(String userId) {
         User user = userService.getUserById(userId);
-        user.setSuspense(false);
+        user.setSuspend(false);
         userService.updateUser(user);
     }
 }

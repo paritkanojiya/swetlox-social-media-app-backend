@@ -33,7 +33,7 @@ public interface UserCollectionRepo extends MongoRepository<UserCollection,Strin
 
     void deleteByUserId(String id);
 
-    Integer countByUserId(String userId);
+    Integer countByUserIdAndBookMark(String userId,boolean t);
 
     Optional<List<UserCollection>> findByEntityIdAndBookMark(String id, boolean b);
 }

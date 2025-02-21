@@ -28,7 +28,7 @@ public class OAuth2Service {
             return userService.saveOAuth2User(user);
         }
         User auth2User = userService.getUser(user.getEmail());
-        if(auth2User.isSuspense()) throw new RuntimeException("you are blacklist user");
+        if(auth2User.isSuspend()) throw new RuntimeException("you are blacklist user");
         if(auth2User.getUserType().equals(UserType.EMAIL)) throw new RuntimeException("provided email already register");
         if(!auth2User.getUserType().equals(user.getUserType()))  auth2User.setUserType(user.getUserType());
         userService.updateUser(auth2User);

@@ -22,11 +22,11 @@ public class GlobalConfig {
 
 
     @Value("${cloudinary.cloud_name}")
-    private static String CLOUD_NAME;
+    private  String CLOUD_NAME;
     @Value("${cloudinary.api_key}")
-    private static String CLOUD_API_KEY;
+    private  String CLOUD_API_KEY;
     @Value("${cloudinary.api_secret}")
-    private static String CLOUD_API_SECRET;
+    private  String CLOUD_API_SECRET;
 
     @Bean(name = "taskExecutor")
     public TaskExecutor taskExecutor(){
@@ -48,13 +48,14 @@ public class GlobalConfig {
     }
 
     @Bean
-    public Cloudinary cloudinaryTemplate(){
-        Map<String,String> config=new HashMap<>();
-        config.put("cloud_name",CLOUD_NAME);
-        config.put("api_key",CLOUD_API_KEY);
-        config.put("api_secret",CLOUD_API_SECRET);
+    public Cloudinary cloudinaryTemplate() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("cloud_name", CLOUD_NAME);
+        config.put("api_key", CLOUD_API_KEY);
+        config.put("api_secret", CLOUD_API_SECRET);
         return new Cloudinary(config);
     }
+
 
     @Bean
     public ModelMapper mapper(){

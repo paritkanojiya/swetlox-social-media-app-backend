@@ -7,8 +7,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 465
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: techsoftindia321@gmail.com
+    password: lgrd aion klni tqhm
     properties:
       mail:
         smtp:
@@ -32,7 +32,7 @@ server:
     context-path: "/swetlox"
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: w7sF7KhZj9UQj5lZ+3O7JH8c4u/D8AeO4jW9F9K4HJk=
   expiry-time: 100000000
   issuer: "swetlox"
 
@@ -43,21 +43,21 @@ default:
 
 oAuth2:
   github:
-    clientId: ${GITHUB_CLIENT_ID}
-    client-secret: ${GITHUB_CLIENT_SECRET}
+    clientId: Ov23liw87lyR9NqxEsVr
+    client-secret: bbc961b19f2cb19999c63301aaf4ccf139159b80
     token-uri: https://github.com/login/oauth/access_token
     fetch-data-uri: https://api.github.com/user
     oauth2-login-uri: https://github.com/login/oauth/authorize
   google:
-    clientId: ${GOOGLE_CLIENT_ID}
-    client-secret: ${GOOGLE_CLIENT_SECRET}
+    clientId: 845997678744-j36r6ejcc50bf481vmuepk67ke72oa36.apps.googleusercontent.com
+    client-secret: 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
     token-uri: https://oauth2.googleapis.com/token
     fetch-data-uri: https://www.googleapis.com/oauth2/v3/userinfo
     oauth2-login-uri: https://accounts.google.com/o/oauth2/v2/auth
 
 cloudinary:
-  cloud_name: ${CLOUDINARY_CLOUD_NAME}
-  api_key: ${CLOUDINARY_CLOUD_API_KEY}
-  api_secret: ${CLOUDINARY_CLOUD_API_SECRET}
+  cloud_name: dkbbhmnk6
+  api_key: 771215487231778
+  api_secret: H0Gf79694cfwoIotNeMCk0T1RVU
 swetlox:
   fronted-path: "http://localhost:3000"

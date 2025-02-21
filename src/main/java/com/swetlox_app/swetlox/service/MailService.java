@@ -25,9 +25,9 @@ public class MailService {
     private Session session;
     private final UserOtpRepository userOtpRepo;
     @Value("${spring.mail.username}")
-    private static String email;
+    private  String email;
     @Value("${spring.mail.password}")
-    private static String password;
+    private  String password;
 
     @PostConstruct
     public void init(){

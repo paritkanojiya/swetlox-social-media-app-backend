@@ -17,7 +17,6 @@ import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -28,7 +27,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
@@ -116,7 +114,7 @@ public class UserService {
             return savedUser;
         }
         User user = optionalUser.get();
-        boolean suspense = user.isSuspense();
+        boolean suspense = user.isSuspend();
         if(suspense) throw new RuntimeException("you are blacklist user");
         boolean isSame = user.getUserName().equals(userDto.getUserName());
         if(!isSame){
@@ -132,7 +130,7 @@ public class UserService {
     public User saveOAuth2User(UserDetailsDto userDto){
         User user = toEntity(userDto);
         user.setIsVerified(true);
-        user.setSuspense(false);
+        user.setSuspend(false);
         User savedUser = userRepository.save(user);
         userPreferenceService.initialSetting(savedUser.getId());
         return savedUser;
@@ -155,7 +153,7 @@ public class UserService {
                 .password(encodedPassword)
                 .roleList(List.of(new Role("ROLE_USER")))
                 .userType(userDto.getUserType())
-                .suspense(false)
+                .suspend(false)
                 .isVerified(false)
                 .profileURL("https://res.cloudinary.com/dkbbhmnk6/image/upload/v1724336510/default_ia7jfs.jpg")
                 .build();
@@ -202,6 +200,7 @@ public class UserService {
     }
 
     public List<Map<String, Object>> searchUser(String q, User authUser) {
+        System.out.println(q);
         List<Map<String, Object>> users = new ArrayList<>();
         if (q.isEmpty()) {
             return Collections.emptyList();

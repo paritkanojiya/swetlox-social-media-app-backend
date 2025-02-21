@@ -44,7 +44,7 @@ public class AnalyticsService {
     }
     
     private AnalyticsResponseDto getAnalyticsDto(String userId){
-        Integer totalBookMark= userCollectionRepo.countByUserId(userId);
+        Integer totalBookMark= userCollectionRepo.countByUserIdAndBookMark(userId,true);
         Integer userPostCount = postService.getUserPostCount(userId);
         Integer totalReelCount = reelsService.getUserReelCount(userId);
         Integer totalComment = commentService.getCommentCountByUserId(userId);
