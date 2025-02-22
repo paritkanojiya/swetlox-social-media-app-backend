@@ -7,8 +7,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 465
-    username: techsoftindia321@gmail.com
-    password: lgrd aion klni tqhm
+    username: 
+    password: 
     properties:
       mail:
         smtp:
@@ -43,21 +43,21 @@ default:
 
 oAuth2:
   github:
-    clientId: Ov23liw87lyR9NqxEsVr
-    client-secret: bbc961b19f2cb19999c63301aaf4ccf139159b80
+    clientId: 
+    client-secret: 
     token-uri: https://github.com/login/oauth/access_token
     fetch-data-uri: https://api.github.com/user
     oauth2-login-uri: https://github.com/login/oauth/authorize
   google:
-    clientId: 845997678744-j36r6ejcc50bf481vmuepk67ke72oa36.apps.googleusercontent.com
-    client-secret: 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
+    clientId: 
+    client-secret: 
     token-uri: https://oauth2.googleapis.com/token
     fetch-data-uri: https://www.googleapis.com/oauth2/v3/userinfo
     oauth2-login-uri: https://accounts.google.com/o/oauth2/v2/auth
 
 cloudinary:
-  cloud_name: dkbbhmnk6
-  api_key: 771215487231778
-  api_secret: H0Gf79694cfwoIotNeMCk0T1RVU
+  cloud_name:
+  api_key:
+  api_secret: 
 swetlox:
   fronted-path: "http://localhost:3000"
